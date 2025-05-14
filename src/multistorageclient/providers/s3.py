@@ -29,6 +29,7 @@ from botocore.exceptions import ClientError, IncompleteReadError, ReadTimeoutErr
 from botocore.session import get_session
 
 from ..instrumentation.utils import set_span_attribute
+from ..rust_utils import run_async_rust_client_method
 from ..telemetry import Telemetry
 from ..telemetry.attributes.base import AttributesProvider
 from ..types import (
@@ -160,6 +161,10 @@ class S3StorageProvider(BaseStorageProvider):
             use_threads=True,
         )
 
+        self._rust_client = None
+        if "rust_client" in kwargs:
+            self._rust_client = self._create_rust_client(kwargs.get("rust_client"))
+
     def _is_directory_bucket(self, bucket: str) -> bool:
         """
         Determines if the bucket is a directory bucket based on bucket name.
@@ -237,6 +242,43 @@ class S3StorageProvider(BaseStorageProvider):
 
         # Fallback to standard credential chain.
         return boto3.client("s3", **options)
+
+    def _create_rust_client(self, rust_client_options: Optional[dict[str, Any]] = None):
+        """
+        Creates and configures the rust client, using refreshable credentials if possible.
+        """
+        from multistorageclient_rust import RustClient
+
+        configs = {}
+        if self._region_name:
+            configs["region_name"] = self._region_name
+
+        bucket, _ = split_path(self._base_path)
+        configs["bucket"] = bucket
+
+        if self._endpoint_url:
+            configs["endpoint_url"] = self._endpoint_url
+
+        if self._credentials_provider:
+            creds = self._fetch_credentials()
+            if "expiry_time" in creds and creds["expiry_time"]:
+                # TODO: Implement refreshable credentials
+                raise NotImplementedError("Refreshable credentials are not yet implemented for the rust client.")
+            else:
+                # Add static credentials to the configs dictionary
+                configs["aws_access_key_id"] = creds["access_key"]
+                configs["aws_secret_access_key"] = creds["secret_key"]
+                if creds["token"]:
+                    configs["aws_session_token"] = creds["token"]
+
+        if rust_client_options:
+            if rust_client_options.get("allow_http", False):
+                configs["allow_http"] = True
+
+        return RustClient(
+            provider=PROVIDER,
+            configs=configs,
+        )
 
     def _fetch_credentials(self) -> dict:
         """
@@ -410,8 +452,12 @@ class S3StorageProvider(BaseStorageProvider):
             if validated_attributes:
                 kwargs["Metadata"] = validated_attributes
 
-            # Capture the response from put_object
-            response = self._s3_client.put_object(**kwargs)
+            rust_unsupported_feature_keys = {"Metadata", "StorageClass", "IfMatch", "IfNoneMatch"}
+            if self._rust_client and all(key not in kwargs for key in rust_unsupported_feature_keys):
+                response = run_async_rust_client_method(self._rust_client, "put", key, body)
+            else:
+                # Capture the response from put_object
+                response = self._s3_client.put_object(**kwargs)
 
             # Extract and set x-trans-id if present
             _extract_x_trans_id(response)
@@ -426,9 +472,19 @@ class S3StorageProvider(BaseStorageProvider):
         def _invoke_api() -> bytes:
             if byte_range:
                 bytes_range = f"bytes={byte_range.offset}-{byte_range.offset + byte_range.size - 1}"
-                response = self._s3_client.get_object(Bucket=bucket, Key=key, Range=bytes_range)
+                if self._rust_client:
+                    response = run_async_rust_client_method(
+                        self._rust_client, "get", key, byte_range.offset, byte_range.offset + byte_range.size - 1
+                    )
+                    return response
+                else:
+                    response = self._s3_client.get_object(Bucket=bucket, Key=key, Range=bytes_range)
             else:
-                response = self._s3_client.get_object(Bucket=bucket, Key=key)
+                if self._rust_client:
+                    response = run_async_rust_client_method(self._rust_client, "get", key)
+                    return response
+                else:
+                    response = self._s3_client.get_object(Bucket=bucket, Key=key)
 
             # Extract and set x-trans-id if present
             _extract_x_trans_id(response)
@@ -622,13 +678,17 @@ class S3StorageProvider(BaseStorageProvider):
                 validated_attributes = validate_attributes(attributes)
                 if validated_attributes:
                     extra_args["Metadata"] = validated_attributes
-                response = self._s3_client.upload_file(
-                    Filename=f,
-                    Bucket=bucket,
-                    Key=key,
-                    Config=self._transfer_config,
-                    ExtraArgs=extra_args,
-                )
+                if self._rust_client and not extra_args:
+                    # TODO: Add support for multipart upload of rust client
+                    response = run_async_rust_client_method(self._rust_client, "upload", f, key)
+                else:
+                    response = self._s3_client.upload_file(
+                        Filename=f,
+                        Bucket=bucket,
+                        Key=key,
+                        Config=self._transfer_config,
+                        ExtraArgs=extra_args,
+                    )
 
                 # Extract and set x-trans-id if present
                 _extract_x_trans_id(response)
@@ -696,12 +756,16 @@ class S3StorageProvider(BaseStorageProvider):
                 response = None
                 with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=os.path.dirname(f), prefix=".") as fp:
                     temp_file_path = fp.name
-                    response = self._s3_client.download_fileobj(
-                        Bucket=bucket,
-                        Key=key,
-                        Fileobj=fp,
-                        Config=self._transfer_config,
-                    )
+                    if self._rust_client:
+                        # TODO: Add support for multipart download of rust client
+                        response = run_async_rust_client_method(self._rust_client, "download", key, temp_file_path)
+                    else:
+                        response = self._s3_client.download_fileobj(
+                            Bucket=bucket,
+                            Key=key,
+                            Fileobj=fp,
+                            Config=self._transfer_config,
+                        )
 
                 # Extract and set x-trans-id if present
                 _extract_x_trans_id(response)

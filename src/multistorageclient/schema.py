@@ -120,6 +120,7 @@ PROFILE_SCHEMA = {
                         "type": "object",
                         "properties": {
                             "base_path": {"type": "string", "minLength": 0},
+                            "rust_client": {"type": "object"},
                         },
                         "required": ["base_path"],
                     },

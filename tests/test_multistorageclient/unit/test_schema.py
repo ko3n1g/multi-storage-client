@@ -55,6 +55,27 @@ def test_validate_profiles():
             }
         )
 
+    # Valid configurations for s3 and swiftstack with Rust client options
+    for provider in ("s3", "s8k"):
+        validate_config(
+            {
+                "profiles": {
+                    "default": {
+                        "storage_provider": {
+                            "type": provider,
+                            "options": {
+                                "base_path": "bucket/prefix",
+                                "endpoint_url": "http://localhost:9000",
+                                "rust_client": {
+                                    "allow_http": True,
+                                },
+                            },
+                        }
+                    }
+                }
+            }
+        )
+
 
 def test_validate_cache():
     default_storage_provider = {"storage_provider": {"type": "s3", "options": {"base_path": "bucket/prefix"}}}

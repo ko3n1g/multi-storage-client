@@ -17,6 +17,7 @@ import os
 import pickle
 import sys
 import tempfile
+from typing import cast
 
 import pytest
 
@@ -917,3 +918,46 @@ def test_find_config_file_paths():
     )
 
     assert paths == expected_paths
+
+
+def test_s3_storage_provider_with_rust_client() -> None:
+    config = StorageClientConfig.from_yaml(
+        """
+        profiles:
+          s3_profile_with_rust:
+            storage_provider:
+              type: s3
+              options:
+                base_path: bucket
+                region_name: us-west-2
+                endpoint_url: http://localhost:10000
+                rust_client: 
+                  allow_http: true
+            credentials_provider:
+              type: S3Credentials
+              options:
+                access_key: my_key
+                secret_key: my_secret
+        """,
+        profile="s3_profile_with_rust",
+    )
+    assert isinstance(config.storage_provider, S3StorageProvider)
+    storage_provider = cast(S3StorageProvider, config.storage_provider)
+    assert storage_provider._rust_client is not None
+
+    config = StorageClientConfig.from_yaml(
+        """
+        profiles:
+          swiftstack_profile_with_rust:
+            storage_provider:
+              type: s8k
+              options:
+                base_path: bucket
+                endpoint_url: https://pdx.s8k.io
+                rust_client: {}
+        """,
+        profile="swiftstack_profile_with_rust",
+    )
+    assert isinstance(config.storage_provider, S3StorageProvider)
+    storage_provider = cast(S3StorageProvider, config.storage_provider)
+    assert storage_provider._rust_client is not None

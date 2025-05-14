@@ -17,13 +17,14 @@ import functools
 import os
 import tempfile
 import uuid
+from typing import Union
 
 import pytest
 
 import multistorageclient.telemetry as telemetry
 import test_multistorageclient.unit.utils.tempdatastore as tempdatastore
 from multistorageclient import StorageClient, StorageClientConfig
-from multistorageclient.types import PreconditionFailedError
+from multistorageclient.types import PreconditionFailedError, Range
 from test_multistorageclient.unit.utils.telemetry.metrics.export import InMemoryMetricExporter
 
 
@@ -530,3 +531,51 @@ def test_storage_with_root_base_path(temp_data_store_type: type[tempdatastore.Te
             storage_client.delete(path=fname)
 
         assert len(list(storage_client.list(prefix=bucket))) == 0
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporarySwiftStackBucket],
+    ],
+)
+def test_storage_providers_with_rust_client(
+    temp_data_store_type: type[Union[tempdatastore.TemporaryAWSS3Bucket, tempdatastore.TemporarySwiftStackBucket]],
+):
+    with temp_data_store_type(enable_rust_client=True) as temp_data_store:
+        profile = "data"
+        config_dict = {"profiles": {profile: temp_data_store.profile_config_dict()}}
+        storage_client = StorageClient(config=StorageClientConfig.from_dict(config_dict=config_dict, profile=profile))
+        file_extension = ".txt"
+        # add a random string to the file path below so concurrent tests don't conflict
+        file_path_fragments = [f"{uuid.uuid4().hex}-prefix", "infix", f"suffix{file_extension}"]
+        file_path = os.path.join(*file_path_fragments)
+        file_body_bytes = b"\x00\x01\x02" * 3
+
+        # Write a file.
+        storage_client.write(path=file_path, body=file_body_bytes)
+
+        # Check the file contents.
+        assert storage_client.read(path=file_path) == file_body_bytes
+
+        # Test range read
+        result = storage_client.read(path=file_path, byte_range=Range(1, 4))
+        assert result == file_body_bytes[1:4]
+
+        # Delete the file.
+        storage_client.delete(path=file_path)
+
+        # Upload + download the file.
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(file_body_bytes)
+            temp_file.close()
+            storage_client.upload_file(remote_path=file_path, local_path=temp_file.name)
+        assert storage_client.is_file(path=file_path)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.close()
+            storage_client.download_file(remote_path=file_path, local_path=temp_file.name)
+            assert os.path.getsize(temp_file.name) == len(file_body_bytes)
+
+        # Delete the file.
+        storage_client.delete(path=file_path)

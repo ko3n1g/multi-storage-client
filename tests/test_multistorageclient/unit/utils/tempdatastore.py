@@ -96,7 +96,7 @@ class TemporaryAWSS3Bucket(TemporaryDataStore):
     #: S3 client.
     _client: Any
 
-    def __init__(self):
+    def __init__(self, enable_rust_client: bool = False):
         import boto3
 
         self._bucket_name = str(uuid.uuid4())
@@ -128,6 +128,11 @@ class TemporaryAWSS3Bucket(TemporaryDataStore):
                 "options": {"access_key": access_key, "secret_key": secret_key},
             },
         }
+
+        if enable_rust_client:
+            self._profile_config_dict["storage_provider"]["options"]["rust_client"] = {
+                "allow_http": True,
+            }
 
     def cleanup(self) -> None:
         try:
@@ -263,6 +268,6 @@ class TemporarySwiftStackBucket(TemporaryAWSS3Bucket):
     the newly created temporary data store and all its contents are removed.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, enable_rust_client: bool = False):
+        super().__init__(enable_rust_client=enable_rust_client)
         self._profile_config_dict["storage_provider"]["type"] = "s8k"
