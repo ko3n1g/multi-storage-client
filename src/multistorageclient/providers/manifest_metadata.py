@@ -236,10 +236,8 @@ class ManifestMetadataProvider(MetadataProvider):
         :param storage_provider: The storage provider to use for writing.
         :param object_metadata: objects to include in manifest.
         """
-
-        def helper_write_file_to_storage(storage_provider: StorageProvider, path: str, content: str) -> None:
-            # Convert content to bytes and write it to the storage provider
-            storage_provider.put_object(path, content.encode("utf-8"))
+        if not object_metadata:
+            return
 
         base_path = self._manifest_path
         manifest_base_path = base_path

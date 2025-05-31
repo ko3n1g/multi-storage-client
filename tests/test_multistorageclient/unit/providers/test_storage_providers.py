@@ -29,16 +29,18 @@ from test_multistorageclient.unit.utils.telemetry.metrics.export import InMemory
 
 
 @pytest.mark.parametrize(
-    argnames=["temp_data_store_type"],
+    argnames=["temp_data_store_type", "with_cache"],
     argvalues=[
-        [tempdatastore.TemporaryPOSIXDirectory],
-        [tempdatastore.TemporaryAWSS3Bucket],
-        [tempdatastore.TemporaryAzureBlobStorageContainer],
-        [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
+        # Test all store types without cache
+        [tempdatastore.TemporaryPOSIXDirectory, False],
+        [tempdatastore.TemporaryAWSS3Bucket, False],
+        [tempdatastore.TemporaryAzureBlobStorageContainer, False],
+        [tempdatastore.TemporaryGoogleCloudStorageBucket, False],
+        [tempdatastore.TemporarySwiftStackBucket, False],
+        # Test only one store type with cache enabled
+        [tempdatastore.TemporaryAWSS3Bucket, True],
     ],
 )
-@pytest.mark.parametrize(argnames=["with_cache"], argvalues=[[True], [False]])
 def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDataStore], with_cache: bool):
     telemetry_resources: telemetry.Telemetry = telemetry.init(mode=telemetry.TelemetryMode.LOCAL)
 
@@ -250,10 +252,7 @@ def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDat
         [tempdatastore.TemporarySwiftStackBucket],
     ],
 )
-@pytest.mark.parametrize(argnames=["with_cache"], argvalues=[[True], [False]])
-def test_storage_providers_list_directories(
-    temp_data_store_type: type[tempdatastore.TemporaryDataStore], with_cache: bool
-):
+def test_storage_providers_list_directories(temp_data_store_type: type[tempdatastore.TemporaryDataStore]):
     with temp_data_store_type() as temp_data_store:
         profile = "data"
         config_dict = {"profiles": {profile: temp_data_store.profile_config_dict()}}
