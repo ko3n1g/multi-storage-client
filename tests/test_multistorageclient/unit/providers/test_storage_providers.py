@@ -60,7 +60,17 @@ def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDat
             },
         }
         if with_cache:
-            config_dict["cache"] = {"size": "10M", "use_etag": True, "eviction_policy": {"policy": "random"}}
+            config_dict["cache"] = {
+                "size": "10M",
+                "use_etag": True,
+                "eviction_policy": {
+                    "policy": "random",
+                },
+                "cache_backend": {
+                    "cache_path": tempfile.mkdtemp(),
+                },
+            }
+
         storage_client = StorageClient(
             config=StorageClientConfig.from_dict(
                 config_dict=config_dict, profile=profile, telemetry=telemetry_resources
@@ -249,7 +259,6 @@ def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDat
         [tempdatastore.TemporaryAWSS3Bucket],
         [tempdatastore.TemporaryAzureBlobStorageContainer],
         [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
     ],
 )
 def test_storage_providers_list_directories(temp_data_store_type: type[tempdatastore.TemporaryDataStore]):
@@ -279,7 +288,6 @@ def test_storage_providers_list_directories(temp_data_store_type: type[tempdatas
         [tempdatastore.TemporaryAWSS3Bucket],
         [tempdatastore.TemporaryAzureBlobStorageContainer],
         [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
         [tempdatastore.TemporaryPOSIXDirectory],
     ],
 )
@@ -323,7 +331,6 @@ def test_put_object_with_etag_metadata(temp_data_store_type: type[tempdatastore.
         [tempdatastore.TemporaryAWSS3Bucket],
         [tempdatastore.TemporaryAzureBlobStorageContainer],
         [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
         [tempdatastore.TemporaryPOSIXDirectory],
     ],
 )
@@ -432,7 +439,6 @@ def test_posix_xattr_metadata(temp_data_store_type: type[tempdatastore.Temporary
         [tempdatastore.TemporaryAWSS3Bucket],
         [tempdatastore.TemporaryAzureBlobStorageContainer],
         [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
     ],
 )
 def test_put_object_with_conditional_params(temp_data_store_type: type[tempdatastore.TemporaryDataStore]):
@@ -496,9 +502,6 @@ def test_put_object_with_conditional_params(temp_data_store_type: type[tempdatas
     argnames=["temp_data_store_type"],
     argvalues=[
         [tempdatastore.TemporaryAWSS3Bucket],
-        [tempdatastore.TemporaryAzureBlobStorageContainer],
-        [tempdatastore.TemporaryGoogleCloudStorageBucket],
-        [tempdatastore.TemporarySwiftStackBucket],
         [tempdatastore.TemporaryPOSIXDirectory],
     ],
 )

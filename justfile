@@ -39,13 +39,7 @@ stop-storage-systems:
     # Stop storage systems.
     #
     # Azurite's process commands are `node` instead of `azurite`. Find by port instead.
-    for PID in $(lsof -i :10000-10002 -c fake-gcs-server -c minio -t); do \
-        if [[ "${0:-}" =~ ^(-)?zsh$ ]]; then \
-            kill -s KILL $PID; \
-        else \
-            kill --signal TERM --timeout 1000 KILL $PID; \
-        fi \
-    done
+    for PID in $(lsof -i :10000-10002 -c fake-gcs-server -c minio -t); do kill -s KILL $PID; done
     # Remove sandbox directories.
     -rm -rf .{azurite,fake-gcs-server,minio}/sandbox
 
@@ -76,13 +70,7 @@ start-storage-systems: stop-storage-systems
 # Stop telemetry systems.
 stop-telemetry-systems:
     # Stop telemetry systems.
-    for PID in $(lsof -c grafana -c mimir -c tempo -t); do \
-        if [[ "${0:-}" =~ ^(-)?zsh$ ]]; then \
-            kill -s KILL $PID; \
-        else \
-            kill --signal TERM --timeout 1000 KILL $PID; \
-        fi \
-    done
+    for PID in $(lsof -c grafana -c mimir -c tempo -t); do kill -s KILL $PID; done
     # Remove sandbox directories.
     -rm -rf .{grafana,mimir,tempo}/sandbox
 
@@ -129,9 +117,9 @@ run-unit-tests: prepare-virtual-environment start-storage-systems && stop-storag
     if [[ -z "${CI:-}" ]]; then \
         NUMPROCESSES=auto; \
     else \
-        NUMPROCESSES=2; \
+        NUMPROCESSES=0; \
     fi; \
-    uv run pytest --cov --cov-report term --cov-report html --cov-report xml --durations 0 --durations-min 10 --junit-xml .reports/unit/pytest.xml --numprocesses $NUMPROCESSES --max-worker-restart 5
+    uv run pytest --cov --cov-report term --cov-report html --cov-report xml --durations 0 --durations-min 10 --junit-xml .reports/unit/pytest.xml --numprocesses $NUMPROCESSES
 
 # Run load tests. For dummy load generation when experimenting with telemetry.
 run-load-tests: prepare-virtual-environment start-storage-systems && stop-storage-systems

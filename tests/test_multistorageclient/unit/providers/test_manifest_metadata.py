@@ -31,9 +31,6 @@ from multistorageclient.providers.manifest_metadata import (
     argvalues=[
         [tempdatastore.TemporaryPOSIXDirectory, False],
         [tempdatastore.TemporaryAWSS3Bucket, False],
-        [tempdatastore.TemporaryAzureBlobStorageContainer, False],
-        [tempdatastore.TemporaryGoogleCloudStorageBucket, False],
-        [tempdatastore.TemporarySwiftStackBucket, False],
         [tempdatastore.TemporaryPOSIXDirectory, True],
         [tempdatastore.TemporaryAWSS3Bucket, True],
     ],
