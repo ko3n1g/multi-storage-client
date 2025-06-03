@@ -93,6 +93,7 @@ STORAGE_PROVIDER_MAPPING = {
     "azure": "AzureBlobStorageProvider",
     "ais": "AIStoreStorageProvider",
     "s8k": "S8KStorageProvider",
+    "gcs-s3": "GoogleS3StorageProvider",
 }
 
 CREDENTIALS_PROVIDER_MAPPING = {
