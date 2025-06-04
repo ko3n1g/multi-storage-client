@@ -97,6 +97,8 @@ _OTEL_TRACE_EXPORTER_MAPPING = {
 _OTEL_METRIC_EXPORTER_MAPPING = {
     "console": "opentelemetry.sdk.metrics.export.ConsoleMetricExporter",
     "otlp": "opentelemetry.exporter.otlp.proto.http.metric_exporter.OTLPMetricExporter",
+    # "Private" until it's decided whether this will be official.
+    "_otlp_msal": "multistorageclient.telemetry.metrics.exporters.otlp_msal._OTLPMSALMetricExporter",
 }
 
 
