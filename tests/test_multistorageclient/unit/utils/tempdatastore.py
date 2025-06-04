@@ -244,6 +244,18 @@ class TemporaryGoogleCloudStorageBucket(TemporaryDataStore):
             bucket.delete()
 
 
+class TemporaryGoogleCloudStorageS3Bucket(TemporaryAWSS3Bucket):
+    """
+    This class creates a temporary Google Cloud Storage S3 bucket. The resulting object can be used as a context manager.
+    On completion of the context or destruction of the temporary data store object,
+    the newly created temporary data store and all its contents are removed.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._profile_config_dict["storage_provider"]["type"] = "gcs_s3"
+
+
 class TemporarySwiftStackBucket(TemporaryAWSS3Bucket):
     """
     This class creates a temporary SwiftStack bucket. The resulting object can be used as a context manager.

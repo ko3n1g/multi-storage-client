@@ -15,6 +15,7 @@
 
 import pytest
 
+from multistorageclient.config import STORAGE_PROVIDER_MAPPING
 from multistorageclient.schema import validate_config
 
 
@@ -45,7 +46,7 @@ def test_validate_profiles():
         )
 
     # Valid configurations
-    for provider in ("file", "s3", "oci", "azure", "gcs", "ais"):
+    for provider in STORAGE_PROVIDER_MAPPING.keys():
         validate_config(
             {
                 "profiles": {

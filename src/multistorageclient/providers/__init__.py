@@ -39,7 +39,7 @@ def __getattr__(name: str) -> Any:
         # GCS
         "GoogleStorageProvider": ".gcs",
         "GoogleIdentityPoolCredentialsProvider": ".gcs",
-        "GoogleS3StorageProvider": ".gcs-s3",
+        "GoogleS3StorageProvider": ".gcs_s3",
         # Oracle
         "OracleStorageProvider": ".oci",
         # S3

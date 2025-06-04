@@ -32,7 +32,7 @@ profiles:
         access_key: "*****"
         secret_key: "*****"
     storage_provider:
-      type: gcs-s3 # Required instead of s3 since GCS Supports Only Signature Version 2, not Signature Version 4 (s3v4) (AWS current version)
+      type: gcs_s3 # Required instead of s3 since GCS Supports Only Signature Version 2, not Signature Version 4 (s3v4) (AWS current version)
       options:
         base_path: nvdataplatformdev/msc-test
         endpoint_url: https://storage.googleapis.com

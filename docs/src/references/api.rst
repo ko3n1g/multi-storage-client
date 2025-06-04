@@ -42,7 +42,7 @@ Providers
    :members:
    :undoc-members:
 
-.. automodule:: multistorageclient.providers.gcs-s3
+.. automodule:: multistorageclient.providers.gcs_s3
    :members:
    :undoc-members:
 

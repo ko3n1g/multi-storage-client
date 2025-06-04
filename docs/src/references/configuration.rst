@@ -205,12 +205,12 @@ Options: See parameters in :py:class:`multistorageclient.providers.gcs.GoogleSto
            base_path: my-bucket
            project_id: my-project-id
 
-``gcs-s3``
+``gcs_s3``
 ----------
 
 Google Cloud Storage provider using the GCS S3 interface.
 
-Options: See parameters in :py:class:`multistorageclient.providers.gcs-s3.GoogleS3StorageProvider`.
+Options: See parameters in :py:class:`multistorageclient.providers.gcs_s3.GoogleS3StorageProvider`.
 
 .. code-block:: yaml
    :caption: Example configuration.
@@ -218,7 +218,7 @@ Options: See parameters in :py:class:`multistorageclient.providers.gcs-s3.Google
    profiles:
      my-profile:
        storage_provider:
-         type: gcs-s3
+         type: gcs_s3
          options:
            base_path: my-bucket
            endpoint_url: https://storage.googleapis.com

@@ -15,7 +15,7 @@
 
 from .s3 import S3StorageProvider
 
-PROVIDER = "gcs-s3"
+PROVIDER = "gcs_s3"
 
 
 class GoogleS3StorageProvider(S3StorageProvider):

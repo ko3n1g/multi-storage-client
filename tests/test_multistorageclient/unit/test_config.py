@@ -632,6 +632,39 @@ def test_s3_storage_provider_passthrough_options() -> None:
     )
 
 
+def test_gcs_s3_storage_provider_passthrough_options() -> None:
+    profile = "data"
+    StorageClient(
+        config=StorageClientConfig.from_dict(
+            config_dict={
+                "profiles": {
+                    profile: {
+                        "storage_provider": {
+                            "type": "gcs_s3",
+                            "options": {
+                                "base_path": "bucket",
+                                "endpoint_url": "https://storage.googleapis.com",
+                                # Passthrough options.
+                                "request_checksum_calculation": "when_required",
+                                "response_checksum_validation": "when_required",
+                                "max_pool_connections": 1,
+                                "connect_timeout": 1,
+                                "read_timeout": 1,
+                                "retries": {
+                                    "total_max_attempts": 2,
+                                    "max_attempts": 1,
+                                    "mode": "adaptive",
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            profile=profile,
+        )
+    )
+
+
 def test_s8k_storage_provider_passthrough_options() -> None:
     profile = "data"
     StorageClient(
