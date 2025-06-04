@@ -44,7 +44,7 @@ msal = [
 
 # Storage providers.
 aistore = [
-    "aistore~=1.13"
+    "aistore~=1.14"
 ]
 azure-storage-blob = [
     "azure-storage-blob~=12.17"

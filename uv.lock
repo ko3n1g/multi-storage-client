@@ -14,7 +14,7 @@ resolution-mode = "lowest-direct"
 
 [[package]]
 name = "aistore"
-version = "1.13.0"
+version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "braceexpand" },
@@ -31,9 +31,9 @@ dependencies = [
     { name = "urllib3" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/19/26f470e27d2006850f8b3090e02063121fda20181bba998b8d8e38166473/aistore-1.13.0.tar.gz", hash = "sha256:d905e0b8479f1bb438aa01a16a6d34ec7b440d0cede5a3f05c76cd16e0c3b694", size = 85750, upload-time = "2025-04-02T17:46:30.87Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/6f/24ccc378a6e95c6dcec6c9e61552fe41e302f03c1225966ead6d07707a76/aistore-1.14.0.tar.gz", hash = "sha256:2dc7cdbab7f1aa653c2e05d621d211ee6e3c3000f5d8cabc6c49b143e35fb92a", size = 98961, upload-time = "2025-05-27T18:08:16.606Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/ab/60cb1d315a020c6975d37b853f933716656c0bdd5cc59e157e812741d5d0/aistore-1.13.0-py3-none-any.whl", hash = "sha256:2b23ae713ceeda29e58701d9aeb71e95aa0def0bfc5680b214341a04bac1d01c", size = 125120, upload-time = "2025-04-02T17:46:29.201Z" },
+    { url = "https://files.pythonhosted.org/packages/86/df/e1015e788e8e52beb4a589420c06647b06dda540183f83e5bf7ec525da5a/aistore-1.14.0-py3-none-any.whl", hash = "sha256:776e2f03ecf1a807d03263b589a66155237a9a916c81d75dfd2e23bbcdf64010", size = 143782, upload-time = "2025-05-27T18:08:14.604Z" },
 ]
 
 [[package]]
@@ -1009,7 +1009,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aistore", marker = "extra == 'aistore'", specifier = "~=1.13" },
+    { name = "aistore", marker = "extra == 'aistore'", specifier = "~=1.14" },
     { name = "azure-storage-blob", marker = "extra == 'azure-storage-blob'", specifier = "~=12.17" },
     { name = "boto3", marker = "extra == 'boto3'", specifier = "~=1.36" },
     { name = "datasketches", marker = "extra == 'observability-otel'", specifier = "~=5.1" },

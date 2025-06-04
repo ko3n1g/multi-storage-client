@@ -42,6 +42,7 @@ from .base import BaseStorageProvider
 _T = TypeVar("_T")
 
 PROVIDER = "ais"
+DEFAULT_PAGE_SIZE = 1000
 
 
 class StaticAISCredentialProvider(CredentialsProvider):
@@ -309,19 +310,21 @@ class AIStoreStorageProvider(BaseStorageProvider):
 
         def _invoke_api() -> Iterator[ObjectMetadata]:
             # AIS has no start key option like other object stores.
-            all_objects = self.client.bucket(bck_name=bucket, provider=self.provider).list_all_objects_iter(
-                prefix=prefix, props="name,size,atime,checksum,cone"
+            all_objects = self.client.bucket(bck_name=bucket, provider=self.provider).list_objects_iter(
+                prefix=prefix, props="name,size,atime,checksum,cone", page_size=DEFAULT_PAGE_SIZE
             )
 
             # Assume AIS guarantees lexicographical order.
-            for obj in all_objects:
+            for bucket_entry in all_objects:
+                obj = bucket_entry.object
                 key = obj.name
+                props = bucket_entry.generate_object_props()
                 if (start_after is None or start_after < key) and (end_at is None or key <= end_at):
                     yield ObjectMetadata(
                         key=key,
-                        content_length=int(obj.props.size),
+                        content_length=int(props.size),
                         last_modified=AWARE_DATETIME_MIN,
-                        etag=obj.props.checksum_value,
+                        etag=props.checksum_value,
                     )
                 elif end_at is not None and end_at < key:
                     return
