@@ -39,6 +39,7 @@ def __getattr__(name: str) -> Any:
         # GCS
         "GoogleStorageProvider": ".gcs",
         "GoogleIdentityPoolCredentialsProvider": ".gcs",
+        "GoogleS3StorageProvider": ".gcs-s3",
         # Oracle
         "OracleStorageProvider": ".oci",
         # S3
@@ -63,6 +64,7 @@ def __getattr__(name: str) -> Any:
             package_map = {
                 ".azure": "azure-storage-blob",
                 ".gcs": "google-cloud-storage",
+                ".gcs-s3": "boto3",
                 ".oci": "oci",
                 ".s3": "boto3",
                 ".s8k": "boto3",
