@@ -945,6 +945,7 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "pyyaml" },
     { name = "wcmatch" },
+    { name = "tqdm" },
     { name = "xattr" },
 ]
 
@@ -1028,6 +1029,7 @@ requires-dist = [
     { name = "pyyaml", specifier = "~=6.0.1" },
     { name = "torch", marker = "extra == 'torch'", specifier = "~=2.6" },
     { name = "wcmatch", specifier = "~=10.0" },
+    { name = "tqdm", specifier = "~=4.27" },
     { name = "xarray", marker = "extra == 'xarray'", specifier = ">=2024.7.0" },
     { name = "xattr", specifier = "~=1.1.4" },
     { name = "zarr", marker = "extra == 'zarr'", specifier = "~=2.15" },
@@ -2274,6 +2276,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ee/11/08774a8198a33263947c59e04b8a0bf85a61a44e82100c46cf833bbce35e/torch-2.6.0-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:bb2c6c3e65049f081940f5ab15c9136c7de40d3f01192541c920a07c7c585b7e", size = 95782656, upload-time = "2025-01-29T16:21:33.978Z" },
     { url = "https://files.pythonhosted.org/packages/c1/0d/56fb07032accbfebb4555638b6002ec5678d0942da85497e40f9405ab756/torch-2.6.0-cp39-cp39-win_amd64.whl", hash = "sha256:683410f97984103148e31b38a8631acf31c3034c020c0f4d26171e7626d8317a", size = 204061417, upload-time = "2025-01-29T16:18:07.965Z" },
     { url = "https://files.pythonhosted.org/packages/b3/17/41f681b87290a1d2f1394f943e470f8b0b3c2987b7df8dc078d8831fce5b/torch-2.6.0-cp39-none-macosx_11_0_arm64.whl", hash = "sha256:265f70de5fd45b864d924b64be1797f86e76c8e48a02c2a3a6fc7ec247d2226c", size = 66520446, upload-time = "2025-01-29T16:19:42.165Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.27.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/2e/f1ce746f1e8eddee065b0ab55bb57f00c493c9d626b6d0396e0093db9a2e/tqdm-4.27.0.tar.gz", hash = "sha256:a0be569511161220ff709a5b60d0890d47921f746f1c737a11d965e1b29e7b2e", size = 107456 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/33/6d8bd6a7c4238f383426b7593bf05bfd6d9e1f10c3084b56c0f14d973754/tqdm-4.27.0-py2.py3-none-any.whl", hash = "sha256:e293e6d7a7f41a529a27f8d6624ab11544ccbfe82a205af6fad102545099fc21", size = 44512 },
 ]
 
 [[package]]

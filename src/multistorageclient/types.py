@@ -357,6 +357,7 @@ class MetadataProvider(ABC):
         """
         Add a file to be tracked by the :py:class:`MetadataProvider`. Does not have to be
         reflected in listing until a :py:meth:`MetadataProvider.commit_updates` forces a persist.
+        This function must tolerate duplicate calls (idempotent behavior).
 
         :param path: User-supplied virtual path
         :param metadata: physical file metadata from StorageProvider
@@ -368,6 +369,7 @@ class MetadataProvider(ABC):
         """
         Remove a file tracked by the :py:class:`MetadataProvider`. Does not have to be
         reflected in listing until a :py:meth:`MetadataProvider.commit_updates` forces a persist.
+        This function must tolerate duplicate calls (idempotent behavior).
 
         :param path: User-supplied virtual path
         """

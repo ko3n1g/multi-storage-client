@@ -32,7 +32,7 @@ class UuidMetadataProvider(MetadataProvider):
         self._path_to_uuid: dict[str, str] = {}
         self._uuid_to_info: dict[str, ObjectMetadata] = {}
         self._pending_adds: dict[str, ObjectMetadata] = {}
-        self._pending_deletes: list[str] = []
+        self._pending_deletes: set[str] = set()
 
     def list_objects(
         self,
@@ -78,7 +78,7 @@ class UuidMetadataProvider(MetadataProvider):
     def remove_file(self, path: str) -> None:
         if path not in self._path_to_uuid:
             raise ValueError(f"Object {path} does not exist")
-        self._pending_deletes.append(path)
+        self._pending_deletes.add(path)
 
     def commit_updates(self) -> None:
         # Move entries in pending_adds to path_to_uuid and remove entries in pending_deletes from path_to_uuid

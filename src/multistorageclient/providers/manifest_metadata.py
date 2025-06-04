@@ -115,7 +115,7 @@ class ManifestMetadataProvider(MetadataProvider):
     _storage_provider: StorageProvider
     _files: dict[str, ObjectMetadata]
     _pending_adds: dict[str, ObjectMetadata]
-    _pending_removes: list[str]
+    _pending_removes: set[str]
     _manifest_path: str
     _writable: bool
 
@@ -130,7 +130,7 @@ class ManifestMetadataProvider(MetadataProvider):
         self._storage_provider = storage_provider
         self._files = {}
         self._pending_adds = {}
-        self._pending_removes = []
+        self._pending_removes = set()
         self._manifest_path = manifest_path
         self._writable = writable
 
@@ -361,7 +361,7 @@ class ManifestMetadataProvider(MetadataProvider):
             raise RuntimeError(f"Manifest update support not enabled in configuration. Attempted to remove {path}.")
         if path not in self._files:
             raise FileNotFoundError(f"Object {path} does not exist.")
-        self._pending_removes.append(path)
+        self._pending_removes.add(path)
 
     def is_writable(self) -> bool:
         return self._writable
@@ -376,7 +376,7 @@ class ManifestMetadataProvider(MetadataProvider):
 
         for path in self._pending_removes:
             self._files.pop(path)
-        self._pending_removes = []
+        self._pending_removes = set()
 
         # Collect metadata for each object to write out in this part file.
         object_metadata = [

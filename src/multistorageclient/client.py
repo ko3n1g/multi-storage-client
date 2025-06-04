@@ -28,6 +28,7 @@ from .config import StorageClientConfig
 from .constants import MEMORY_LOAD_LIMIT
 from .file import ObjectFile, PosixFile
 from .instrumentation.utils import instrumented
+from .progress_bar import ProgressBar
 from .providers.posix_file import PosixFileStorageProvider
 from .retry import retry
 from .types import MSC_PROTOCOL, ObjectMetadata, Range
@@ -435,6 +436,7 @@ class StorageClient:
         source_path: str = "",
         target_path: str = "",
         delete_unmatched_files: bool = False,
+        description: str = "Syncing",
         num_worker_processes: Optional[int] = None,
     ) -> None:
         """
@@ -444,6 +446,7 @@ class StorageClient:
         :param source_path: The path to sync from.
         :param target_path: The path to sync to.
         :param delete_unmatched_files: Whether to delete files at the target that are not present at the source.
+        :param description: Description of sync process for logging purposes.
         :param num_worker_processes: The number of worker processes to use.
         """
         source_path = source_path.lstrip("/")
@@ -452,17 +455,20 @@ class StorageClient:
         if source_client == self and (source_path.startswith(target_path) or target_path.startswith(source_path)):
             raise ValueError("Source and target paths cannot overlap on same StorageClient.")
 
+        logger.debug(f"Starting sync operation {description}")
+
         # Attempt to balance the number of worker processes and threads.
         num_worker_processes, num_worker_threads = calculate_worker_processes_and_threads(num_worker_processes)
 
         if num_worker_processes == 1:
-            file_queue = queue.Queue(maxsize=2000)
-            result_queue = None
+            file_queue = queue.Queue(maxsize=100000)
+            result_queue = queue.Queue()
         else:
             manager = multiprocessing.Manager()
-            file_queue = manager.Queue(maxsize=2000)
-            # Only need result_queue if using a metadata provider and multiprocessing.
-            result_queue = manager.Queue() if self._metadata_provider else None
+            file_queue = manager.Queue(maxsize=100000)
+            result_queue = manager.Queue()
+
+        progress = ProgressBar(desc=description, show_progress=True, total_items=0)
 
         def match_file_metadata(source_info: ObjectMetadata, target_info: ObjectMetadata) -> bool:
             # If target and source have valid etags defined, use etag and file size to compare.
@@ -478,11 +484,17 @@ class StorageClient:
             """Lists source files and adds them to the queue."""
             source_iter = iter(source_client.list(prefix=source_path))
             target_iter = iter(self.list(prefix=target_path))
+            total_count = 0
 
             source_file = next(source_iter, None)
             target_file = next(target_iter, None)
 
             while source_file or target_file:
+                # Update progress and count each pair (or single) considered for syncing
+                if total_count % 1000 == 0:
+                    progress.update_total(total_count)
+                total_count += 1
+
                 if source_file and target_file:
                     source_key = source_file.key[len(source_path) :].lstrip("/")
                     target_key = target_file.key[len(target_path) :].lstrip("/")
@@ -493,11 +505,16 @@ class StorageClient:
                     elif source_key > target_key:
                         if delete_unmatched_files:
                             file_queue.put((_SyncOp.DELETE, target_file))
+                        else:
+                            progress.update_progress()
                         target_file = next(target_iter, None)  # Skip unmatched target file
                     else:
                         # Both exist, compare metadata
                         if not match_file_metadata(source_file, target_file):
                             file_queue.put((_SyncOp.ADD, source_file))
+                        else:
+                            progress.update_progress()
+
                         source_file = next(source_iter, None)
                         target_file = next(target_iter, None)
                 elif source_file:
@@ -505,15 +522,41 @@ class StorageClient:
                     source_file = next(source_iter, None)
                 else:
                     if delete_unmatched_files:
-                        assert target_file is not None
                         file_queue.put((_SyncOp.DELETE, target_file))
+                    else:
+                        progress.update_progress()
                     target_file = next(target_iter, None)
+
+            progress.update_total(total_count)
 
             for _ in range(num_worker_threads * num_worker_processes):
                 file_queue.put((_SyncOp.STOP, None))  # Signal consumers to stop
 
         producer_thread = threading.Thread(target=producer, daemon=True)
         producer_thread.start()
+
+        def _result_consumer():
+            # Pull from result_queue to collect pending updates from each multiprocessing worker.
+            while True:
+                op, target_file_path, physical_metadata = result_queue.get()
+                if op == _SyncOp.STOP:
+                    break
+
+                if self._metadata_provider:
+                    if op == _SyncOp.ADD:
+                        # Use realpath() to get physical path so metadata provider can
+                        # track the logical/physical mapping.
+                        phys_path, _ = self._metadata_provider.realpath(target_file_path)
+                        physical_metadata.key = phys_path
+                        self._metadata_provider.add_file(target_file_path, physical_metadata)
+                    elif op == _SyncOp.DELETE:
+                        self._metadata_provider.remove_file(target_file_path)
+                    else:
+                        raise RuntimeError(f"Unknown operation: {op}")
+                progress.update_progress()
+
+        result_consumer_thread = threading.Thread(target=_result_consumer, daemon=True)
+        result_consumer_thread.start()
 
         if num_worker_processes == 1:
             # Single process does not require multiprocessing.
@@ -529,22 +572,12 @@ class StorageClient:
 
         producer_thread.join()
 
-        # Pull from result_queue to collect pending updates from each multiprocessing worker.
-        if result_queue and self._metadata_provider:
-            while not result_queue.empty():
-                op, target_file_path, physical_metadata = result_queue.get()
-                if op == _SyncOp.ADD:
-                    # Use realpath() to get physical path so metadata provider can
-                    # track the logical/physical mapping.
-                    phys_path, _ = self._metadata_provider.realpath(target_file_path)
-                    physical_metadata.key = phys_path
-                    self._metadata_provider.add_file(target_file_path, physical_metadata)
-                elif op == _SyncOp.DELETE:
-                    self._metadata_provider.remove_file(target_file_path)
-                else:
-                    raise RuntimeError(f"Unknown operation: {op}")
+        result_queue.put((_SyncOp.STOP, None, None))
+        result_consumer_thread.join()
 
         self.commit_metadata()
+        progress.close()
+        logger.debug(f"Completed sync operation {description}")
 
 
 def _sync_worker_process(
@@ -591,16 +624,19 @@ def _sync_worker_process(
             if result_queue:
                 if op == _SyncOp.ADD:
                     # add tuple of (virtual_path, physical_metadata) to result_queue
-                    physical_metadata = target_client._metadata_provider.get_object_metadata(
-                        target_file_path, include_pending=True
-                    )
+                    if target_client._metadata_provider:
+                        physical_metadata = target_client._metadata_provider.get_object_metadata(
+                            target_file_path, include_pending=True
+                        )
+                    else:
+                        physical_metadata = None
                     result_queue.put((op, target_file_path, physical_metadata))
                 elif op == _SyncOp.DELETE:
                     result_queue.put((op, target_file_path, None))
                 else:
                     raise RuntimeError(f"Unknown operation: {op}")
 
-    """Worker process that spawns threads to handle syncing."""
+    # Worker process that spawns threads to handle syncing.
     with ThreadPoolExecutor(max_workers=num_worker_threads) as executor:
         futures = [executor.submit(_sync_consumer) for _ in range(num_worker_threads)]
         for future in futures:
