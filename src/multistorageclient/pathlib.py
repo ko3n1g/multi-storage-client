@@ -21,7 +21,7 @@ from typing import Union
 
 from .client import StorageClient
 from .shortcuts import resolve_storage_client
-from .types import MSC_PROTOCOL, ObjectMetadata
+from .types import MSC_PROTOCOL, ObjectMetadata, SourceVersionCheckMode
 from .utils import join_paths
 
 logger = logging.Logger(__name__)
@@ -364,8 +364,22 @@ class MultiStoragePath:
 
     # Reading and writing files
 
-    def open(self, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
-        return self._storage_client.open(str(self._internal_path), mode=mode, buffering=buffering, encoding=encoding)
+    def open(
+        self,
+        mode="r",
+        buffering=-1,
+        encoding=None,
+        errors=None,
+        newline=None,
+        check_source_version=SourceVersionCheckMode.INHERIT,
+    ):
+        return self._storage_client.open(
+            str(self._internal_path),
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            check_source_version=check_source_version,
+        )
 
     def read_bytes(self) -> bytes:
         return self._storage_client.read(str(self._internal_path))

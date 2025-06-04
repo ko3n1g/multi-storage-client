@@ -50,3 +50,9 @@ def test_azure_conditional_put(profile_name):
         if_none_match_specific_error_type=PreconditionFailedError,
         supports_if_none_match_star=False,
     )
+
+
+@pytest.mark.parametrize("profile_name", ["test-azure-uswest"])
+def test_azure_open_with_source_version_check(profile_name):
+    profile = profile_name
+    common.test_open_with_source_version_check(profile)

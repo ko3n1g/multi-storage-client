@@ -23,7 +23,6 @@ import pytest
 import multistorageclient.telemetry as telemetry
 import test_multistorageclient.unit.utils.tempdatastore as tempdatastore
 from multistorageclient import StorageClient, StorageClientConfig
-from multistorageclient.constants import MEMORY_LOAD_LIMIT
 from multistorageclient.types import PreconditionFailedError
 from test_multistorageclient.unit.utils.telemetry.metrics.export import InMemoryMetricExporter
 
@@ -215,6 +214,7 @@ def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDat
         # Delete the file.
         storage_client.delete(path=file_path)
 
+        MEMORY_LOAD_LIMIT = 128 * 1024 * 1024
         # Open the file for writes + reads (bytes).
         if storage_client._storage_provider._provider_name == "gcs":
             # GCS simulator does not support multipart uploads

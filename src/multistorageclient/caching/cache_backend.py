@@ -29,7 +29,7 @@ import xattr
 from filelock import BaseFileLock, FileLock, Timeout
 
 from ..instrumentation.utils import CacheManagerMetricsHelper
-from ..types import StorageProvider
+from ..types import SourceVersionCheckMode, StorageProvider
 from .cache_config import CacheConfig
 from .cache_item import CacheItem
 from .eviction_policy import FIFO, LRU, NO_EVICTION, RANDOM, EvictionPolicyFactory
@@ -98,7 +98,9 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def open(self, key: str, mode: str = "rb") -> Optional[Any]:
+    def open(
+        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+    ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         pass
 
@@ -108,7 +110,7 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def contains(self, key: str) -> bool:
+    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
         """Check if the cache contains a file corresponding to the given key."""
         pass
 
@@ -184,7 +186,6 @@ class FileSystemBackend(CacheBackend):
         :param storage_provider: Optional storage provider (not used in filesystem backend).
         """
         super().__init__(profile, cache_config, storage_provider)
-
         self._max_cache_size = cache_config.size_bytes()
         self._last_refresh_time = datetime.now()
         self._metrics_helper = CacheManagerMetricsHelper()
@@ -205,6 +206,7 @@ class FileSystemBackend(CacheBackend):
             os.path.join(self._cache_path, ".cache_refresh.lock"), timeout=self.DEFAULT_FILE_LOCK_TIMEOUT
         )
 
+        print("[Filesystem backend] initializing cache backend")
         # Populate cache with existing files in the cache directory
         self.refresh_cache()
 
@@ -344,12 +346,14 @@ class FileSystemBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="READ", success=success)
 
-    def open(self, key: str, mode: str = "rb") -> Optional[Any]:
+    def open(
+        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+    ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         success = True
         try:
             try:
-                if self.contains(key):
+                if self.contains(key, check_source_version):
                     # Handle both key formats: with and without colon
                     key, _ = self._split_key(key)
                     file_path = self._get_cache_file_path(key)
@@ -412,7 +416,7 @@ class FileSystemBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="SET", success=success)
 
-    def contains(self, key: str) -> bool:
+    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
         """Check if the cache contains a file corresponding to the given key."""
         try:
             # Parse key and etag
@@ -426,7 +430,10 @@ class FileSystemBackend(CacheBackend):
                 return False
 
             # If etag checking is disabled, return True if file exists
-            if not self.use_etag():
+            if check_source_version == SourceVersionCheckMode.INHERIT:
+                if not self.use_etag():
+                    return True
+            elif check_source_version == SourceVersionCheckMode.DISABLE:
                 return True
 
             # Verify etag matches if checking is enabled
@@ -604,13 +611,15 @@ class StorageProviderBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="READ", success=success)
 
-    def open(self, key: str, mode: str = "rb") -> Optional[Any]:
+    def open(
+        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+    ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         success = True
 
         try:
             try:
-                if self.contains(key):
+                if self.contains(key, check_source_version):
                     path, _ = key.split(":")
                     cache_path = f"{self._get_cache_dir()}/{path}"
                     data = self._storage_provider.get_object(cache_path)  # type: ignore
@@ -667,7 +676,7 @@ class StorageProviderBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="SET", success=success)
 
-    def contains(self, key: str) -> bool:
+    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
         """Check if the cache contains a file corresponding to the given key.
 
         When use_etag=False, we only check if the file exists in cache.
@@ -676,7 +685,6 @@ class StorageProviderBackend(CacheBackend):
         try:
             # Parse key and etag
             path, source_etag = self._split_key(key)
-
             # Get cache path and metadata
             cache_path = f"{self._get_cache_dir()}/{path}"
             metadata = self._storage_provider.get_object_metadata(cache_path)  # type: ignore
@@ -686,13 +694,18 @@ class StorageProviderBackend(CacheBackend):
                 return False
 
             # If etag checking is disabled, return True if file exists
-            if not self.use_etag():
+            if check_source_version == SourceVersionCheckMode.INHERIT:
+                if not self.use_etag():
+                    return True
+            elif check_source_version == SourceVersionCheckMode.DISABLE:
                 return True
 
             # Verify etag matches if checking is enabled
             if metadata.metadata:
                 stored_etag = metadata.metadata.get("etag")
-                return stored_etag is not None and stored_etag == source_etag
+
+                result = stored_etag is not None and stored_etag == source_etag
+                return result
 
             return False
 

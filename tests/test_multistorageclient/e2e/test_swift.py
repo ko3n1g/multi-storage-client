@@ -30,3 +30,9 @@ def test_s3_shortcuts(profile_name, config_suffix):
 def test_s3_storage_client(profile_name, config_suffix):
     profile = profile_name + config_suffix
     common.test_storage_client(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-swift-pdx"])
+def test_swift_open_with_source_version_check(profile_name):
+    profile = profile_name
+    common.test_open_with_source_version_check(profile)

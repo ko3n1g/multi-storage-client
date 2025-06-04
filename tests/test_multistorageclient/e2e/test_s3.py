@@ -48,3 +48,9 @@ def test_s3_conditional_put(profile_name):
         if_match_error_type=PreconditionFailedError,
         if_none_match_specific_error_type=NotImplementedError,
     )
+
+
+@pytest.mark.parametrize("profile_name", ["test-s3-iad"])
+def test_s3_open_with_source_version_check(profile_name):
+    profile = profile_name
+    common.test_open_with_source_version_check(profile)

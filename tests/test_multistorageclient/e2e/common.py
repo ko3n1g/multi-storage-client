@@ -23,6 +23,7 @@ from typing import TypeVar
 import pytest
 
 import multistorageclient as msc
+from multistorageclient.types import MSC_PROTOCOL, SourceVersionCheckMode
 
 T = TypeVar("T")
 MB = 1024 * 1024
@@ -294,6 +295,46 @@ def test_conditional_put(
             # Put with same generation should fail
             with pytest.raises(if_none_match_specific_error_type):
                 storage_provider.put_object(key, b"new data", if_none_match=etag)
+
+    finally:
+        # Clean up
+        try:
+            storage_provider.delete_object(key)
+        except Exception:
+            pass
+
+
+def test_open_with_source_version_check(profile: str):
+    """Test the open method with different source version check modes using an actual S3 profile."""
+    client, _ = msc.resolve_storage_client(f"msc://{profile}/")
+    storage_provider = client._storage_provider
+    key = f"test-source-version-check-{uuid.uuid4()}"
+    content1 = b"test content for cache"
+    content2 = b"modified content for cache"
+
+    try:
+        # Write initial content
+        storage_provider.put_object(key, content1)
+        initial_etag = storage_provider.get_object_metadata(key).etag
+        if initial_etag is None:
+            pytest.skip("Backend does not support etag; skipping cache/versioning test.")
+
+        # Read with ENABLE mode - should get updated content
+        with msc.open(f"{MSC_PROTOCOL}{profile}/{key}", "rb", check_source_version=SourceVersionCheckMode.ENABLE) as f:
+            assert f.read() == content1
+
+        # Modify file content
+        storage_provider.put_object(key, content2)
+        new_etag = storage_provider.get_object_metadata(key).etag
+        assert new_etag != initial_etag, "etag should change after file modification"
+
+        # Read with DISABLE mode - should get old content from cache
+        with msc.open(f"{MSC_PROTOCOL}{profile}/{key}", "rb", check_source_version=SourceVersionCheckMode.DISABLE) as f:
+            assert f.read() == content1  # Should read from cache, not see the modification
+
+        # Read with ENABLE mode - should get new content
+        with msc.open(f"{MSC_PROTOCOL}{profile}/{key}", "rb", check_source_version=SourceVersionCheckMode.ENABLE) as f:
+            assert f.read() == content2  # Should update cache
 
     finally:
         # Clean up

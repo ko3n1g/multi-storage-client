@@ -17,7 +17,9 @@ import copy
 import mmap
 import os
 import tempfile
+import uuid
 from concurrent.futures import ThreadPoolExecutor
+from typing import Type
 
 import numpy as np
 import pytest
@@ -28,7 +30,7 @@ from multistorageclient.file import ObjectFile
 from multistorageclient.providers.manifest_metadata import (
     DEFAULT_MANIFEST_BASE_DIR,
 )
-from multistorageclient.types import MSC_PROTOCOL
+from multistorageclient.types import MSC_PROTOCOL, SourceVersionCheckMode
 from test_multistorageclient.unit.utils import config, tempdatastore
 
 MB = 1024 * 1024
@@ -527,3 +529,126 @@ def test_implicit_profiles_with_msc_config(file_storage_config_with_path_mapping
         for env_var in ["AWS_ENDPOINT_URL"]:
             if env_var in os.environ:
                 del os.environ[env_var]
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[[tempdatastore.TemporaryAWSS3Bucket]],
+)
+def test_open_with_source_version_check(temp_data_store_type: Type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test the open method with different source version check modes."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+                "cache": {
+                    "eviction_policy": {
+                        "policy": "no_eviction",
+                    }
+                },
+            }
+        )
+
+        test_uuid = str(uuid.uuid4())
+        key = f"test-source-version-check-{test_uuid}"
+        content1 = b"test content for cache"
+        content2 = b"modified content for cache"
+
+        try:
+            # Write initial content
+            with msc.open(f"{MSC_PROTOCOL}test/{key}", "wb") as f:
+                f.write(content1)
+
+            # Read with ENABLE mode - should get updated content
+            with msc.open(f"{MSC_PROTOCOL}test/{key}", "rb", check_source_version=SourceVersionCheckMode.ENABLE) as f:
+                assert f.read() == content1
+
+            # Modify file content
+            with msc.open(f"{MSC_PROTOCOL}test/{key}", "wb") as f:
+                f.write(content2)
+
+            # Read with DISABLE mode - should get old content from cache
+            with msc.open(f"{MSC_PROTOCOL}test/{key}", "rb", check_source_version=SourceVersionCheckMode.DISABLE) as f:
+                assert f.read() == content1  # Should read from cache, not see the modification
+
+            # Read with ENABLE mode - should get new content
+            with msc.open(f"{MSC_PROTOCOL}test/{key}", "rb", check_source_version=SourceVersionCheckMode.ENABLE) as f:
+                assert f.read() == content2  # Should update cache
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{key}")
+            except Exception:
+                pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[[tempdatastore.TemporaryAWSS3Bucket]],
+)
+def test_open_with_cache_config(temp_data_store_type: Type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test the open method with different cache configurations."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+    with temp_data_store_type() as temp_data_store:
+        # Test with cache enabled and use_etag=True
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+                "cache": {
+                    "use_etag": True,
+                    "eviction_policy": {
+                        "policy": "no_eviction",
+                    },
+                },
+            }
+        )
+
+        body = b"A" * 64 * MB
+        test_uuid = str(uuid.uuid4())
+        filepath = f"testfile-{test_uuid}.bin"
+
+        try:
+            # Write and read with INHERIT mode (should use etag)
+            with msc.open(f"{MSC_PROTOCOL}test/{filepath}", "wb") as fp:
+                fp.write(body)
+
+            with msc.open(f"{MSC_PROTOCOL}test/{filepath}", "rb") as fp:
+                assert fp.read() == body
+
+            # Test with cache enabled and use_etag=False
+            config.setup_msc_config(
+                config_dict={
+                    "profiles": {
+                        "test": temp_data_store.profile_config_dict(),
+                    },
+                    "cache": {
+                        "use_etag": False,
+                        "eviction_policy": {
+                            "policy": "no_eviction",
+                        },
+                    },
+                }
+            )
+
+            # Write and read with INHERIT mode (should not use etag)
+            with msc.open(f"{MSC_PROTOCOL}test/{filepath}", "wb") as fp:
+                fp.write(body)
+
+            with msc.open(f"{MSC_PROTOCOL}test/{filepath}", "rb") as fp:
+                assert fp.read() == body
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{filepath}")
+            except Exception:
+                pass

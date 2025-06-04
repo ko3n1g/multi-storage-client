@@ -31,7 +31,7 @@ from .instrumentation.utils import instrumented
 from .progress_bar import ProgressBar
 from .providers.posix_file import PosixFileStorageProvider
 from .retry import retry
-from .types import MSC_PROTOCOL, ObjectMetadata, Range
+from .types import MSC_PROTOCOL, ObjectMetadata, Range, SourceVersionCheckMode
 from .utils import NullStorageClient, calculate_worker_processes_and_threads, join_paths
 
 logger = logging.Logger(__name__)
@@ -336,6 +336,7 @@ class StorageClient:
         disable_read_cache: bool = False,
         memory_load_limit: int = MEMORY_LOAD_LIMIT,
         atomic: bool = True,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
     ) -> Union[PosixFile, ObjectFile]:
         """
         Returns a file-like object from the storage provider at the specified path.
@@ -350,7 +351,7 @@ class StorageClient:
             This parameter is only applicable to ObjectFile when the mode is "r" or "rb".
         :param atomic: When set to True, the file will be written atomically (rename upon close).
             This parameter is only applicable to PosixFile in write mode.
-
+        :param check_source_version: Whether to check the source version of cached objects.
         :return: A file-like object (PosixFile or ObjectFile) for the specified path.
         """
         if self._is_posix_file_storage_provider():
@@ -366,6 +367,7 @@ class StorageClient:
                 encoding=encoding,
                 disable_read_cache=disable_read_cache,
                 memory_load_limit=memory_load_limit,
+                check_source_version=check_source_version,
             )
 
     def is_file(self, path: str) -> bool:

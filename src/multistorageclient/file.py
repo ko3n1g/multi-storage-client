@@ -34,7 +34,7 @@ from .instrumentation.utils import (
     collect_default_attributes,
     file_tracer,
 )
-from .types import Range
+from .types import Range, SourceVersionCheckMode
 
 if TYPE_CHECKING:
     from .client import StorageClient
@@ -194,6 +194,7 @@ class ObjectFile(IO):
         encoding: Optional[str] = None,
         disable_read_cache: bool = False,
         memory_load_limit: int = MEMORY_LOAD_LIMIT,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
     ):
         """
         Initialize the ObjectFile instance.
@@ -204,6 +205,7 @@ class ObjectFile(IO):
         :param encoding: The encoding to use for text mode. Defaults to None.
         :param disable_read_cache: When set to True, disables caching for the file content. This parameter is only applicable when the mode is "r" or "rb".
         :param memory_load_limit: Size limit in bytes for loading files into memory. Defaults to 512MB. This parameter is only applicable when the mode is "r" or "rb".
+        :param check_source_version: Whether to check the source version of cached objects.
         """
         # Initialize parent trace span for this file to share the context with following R/W operations
         self._trace_span = TRACER.start_span("ObjectFile Lifecycle", attributes=DEFAULT_ATTRIBUTES)
@@ -226,7 +228,7 @@ class ObjectFile(IO):
         self._cache_manager = storage_client._cache_manager
         self._memory_load_limit = memory_load_limit
         self._open_files = []
-
+        self._check_source_version = check_source_version
         if disable_read_cache:
             self._cache_manager = None
 
@@ -281,27 +283,30 @@ class ObjectFile(IO):
             return self._open_large_file()
 
         try:
-            if self._cache_manager.use_etag():
+            if self._check_source_version == SourceVersionCheckMode.INHERIT:
+                if self._cache_manager.use_etag():
+                    cache_path = f"{self._remote_path}:{self._object_metadata.etag}"
+                else:
+                    cache_path = f"{self._remote_path}:{None}"
+            elif self._check_source_version == SourceVersionCheckMode.ENABLE:
                 cache_path = f"{self._remote_path}:{self._object_metadata.etag}"
             else:
                 cache_path = f"{self._remote_path}:{None}"
 
-            if self._cache_manager.contains(cache_path):
+            if self._cache_manager.contains(cache_path, self._check_source_version):
                 # Read from cache
-                file_object = self._cache_manager.open(cache_path, self._mode)
+                file_object = self._cache_manager.open(cache_path, self._mode, self._check_source_version)
             else:
                 # Download file and put it into the cache
                 file_lock = self._cache_manager.acquire_lock(cache_path)
-
                 with file_lock:
-                    if not self._cache_manager.contains(cache_path):
+                    if not self._cache_manager.contains(cache_path, self._check_source_version):
                         # The process writes the file to a temporary file and move it to the cache directory.
                         temp_file_path = self._get_temp_file_path()
                         self._storage_client.download_file(self._remote_path, temp_file_path)
                         self._cache_manager.set(cache_path, temp_file_path)
 
-                file_object = self._cache_manager.open(cache_path, self._mode)
-
+                file_object = self._cache_manager.open(cache_path, self._mode, self._check_source_version)
             if file_object is None:
                 raise FileNotFoundError(f"Unexpected error, file not found at {self._remote_path}")
 

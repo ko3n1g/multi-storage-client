@@ -120,7 +120,7 @@ run-unit-tests: prepare-virtual-environment start-storage-systems && stop-storag
         NUMPROCESSES=0; \
     fi; \
     uv run pytest --cov --cov-report term --cov-report html --cov-report xml --durations 0 --durations-min 10 --junit-xml .reports/unit/pytest.xml --numprocesses $NUMPROCESSES
-
+    
 # Run load tests. For dummy load generation when experimenting with telemetry.
 run-load-tests: prepare-virtual-environment start-storage-systems && stop-storage-systems
     # Load test.

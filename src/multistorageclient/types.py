@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import IO, Any, Optional, Union
 
 from dateutil.parser import parse as dateutil_parser
@@ -479,3 +480,11 @@ class NotModifiedError(Exception):
     """
 
     pass
+
+
+class SourceVersionCheckMode(Enum):
+    """Enum for controlling source version checking behavior."""
+
+    INHERIT = "inherit"  # Inherit from configuration (cache config)
+    ENABLE = "enable"  # Always check source version
+    DISABLE = "disable"  # Never check source version
