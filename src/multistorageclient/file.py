@@ -479,6 +479,10 @@ class ObjectFile(IO):
 
     @file_tracer
     def close(self) -> None:
+        # If the file is already closed, return immediately.
+        if self.closed:
+            return
+
         if self.readable():
             # Ensure the download thread finishes
             if self._download_thread.is_alive():
@@ -701,6 +705,10 @@ class PosixFile(IO):
 
     @file_tracer
     def close(self) -> None:
+        # If the file is already closed, return immediately.
+        if self.closed:
+            return
+
         self._file.close()
 
         if self._atomic and "w" in self._mode:
