@@ -1,14 +1,14 @@
 ## Summary
 
-*Add a one line overview of what this PR aims to accomplish.*
+_Add a one line overview of what this PR aims to accomplish._
 
 ## Details
 
-*Describe your changes. You can be more detailed and descriptive here.*
+_Describe your changes. You can be more detailed and descriptive here._
 
 ## Usage
 
-*You can potentially add a usage example below.*
+_You can potentially add a usage example below._
 
 ```python
 # Add a code snippet demonstrating how to use this.
@@ -23,4 +23,4 @@
 
 ## Additional Information
 
-* Related to #(issue)
+- Related to _issue link (an issue is needed to notify us on Slack)_.

@@ -13,10 +13,6 @@ on:
     types:
       - opened
       - reopened
-  pull_request:
-    types:
-      - opened
-      - reopened
 jobs:
   issue-opened:
     name: Issue Opened
@@ -39,26 +35,4 @@ jobs:
         with:
           payload-delimiter: _
           webhook: ${{ secrets.ISSUE_REOPENED_WEBHOOK_URL }}
-          webhook-type: webhook-trigger
-  pull-request-opened:
-    name: Pull Request Opened
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
-    environment: Slack
-    runs-on: ubuntu-latest
-    steps:
-      - uses: slackapi/slack-github-action@v2.0.0
-        with:
-          payload-delimiter: _
-          webhook: ${{ secrets.PULL_REQUEST_OPENED_WEBHOOK_URL }}
-          webhook-type: webhook-trigger
-  pull-request-reopened:
-    name: Pull Request Reopened
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'reopened' }}
-    environment: Slack
-    runs-on: ubuntu-latest
-    steps:
-      - uses: slackapi/slack-github-action@v2.0.0
-        with:
-          payload-delimiter: _
-          webhook: ${{ secrets.PULL_REQUEST_REOPENED_WEBHOOK_URL }}
           webhook-type: webhook-trigger
