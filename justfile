@@ -15,8 +15,6 @@ help:
 prepare-virtual-environment:
     # Prepare the virtual environment.
     if [[ -z "${CI:-}" ]]; then uv sync --all-extras --python {{python-binary}}; else uv sync --all-extras --locked --python {{python-binary}}; fi
-    # Create the dependency license summary.
-    uv run pip-licenses
 
 # Start the Python REPL.
 start-repl: prepare-virtual-environment
@@ -112,15 +110,13 @@ run-unit-tests: prepare-virtual-environment start-storage-systems && stop-storag
     # Remove test artifacts.
     rm -rf .reports/unit
     # Unit test.
-    #
-    # The CI/CD runner setup only allows 4 cores per job, so using 1 parent + 3 child processes.
     if [[ -z "${CI:-}" ]]; then \
         NUMPROCESSES=auto; \
     else \
         NUMPROCESSES=0; \
     fi; \
     uv run pytest --cov --cov-report term --cov-report html --cov-report xml --durations 0 --durations-min 10 --junit-xml .reports/unit/pytest.xml --numprocesses $NUMPROCESSES
-    
+
 # Run load tests. For dummy load generation when experimenting with telemetry.
 run-load-tests: prepare-virtual-environment start-storage-systems && stop-storage-systems
     # Load test.
