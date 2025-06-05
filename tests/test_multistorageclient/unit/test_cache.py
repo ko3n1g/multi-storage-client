@@ -571,7 +571,7 @@ def test_storage_provider_cache_configs(config_creator, temp_data_store_type, tm
             tempdatastore.TemporaryAWSS3Bucket,
             create_mixed_cache_config,
             ValueError,
-            "The 'size_mb' and 'location' properties are no longer supported",
+            "The 'size_mb' property is no longer supported",
         ],
         [
             tempdatastore.TemporaryAWSS3Bucket,
@@ -596,34 +596,6 @@ def test_storage_provider_invalid_cache_configs(
         config_dict = config_creator(temp_store.profile_config_dict(), tmpdir)
         with pytest.raises(expected_error, match=error_message):
             StorageClientConfig.from_dict(config_dict)
-
-
-@pytest.fixture
-def storage_provider_empty_cache_config(tmpdir):
-    """
-    New cache config format
-    """
-
-    # Create a config dictionary with profile and cache configuration
-    def _config_builder(profile_config):
-        return {"profiles": {"s3-local": profile_config}, "cache": {}}
-
-    return _config_builder
-
-
-@pytest.mark.parametrize(
-    argnames=["temp_data_store_type"],
-    argvalues=[
-        [tempdatastore.TemporaryAWSS3Bucket],
-    ],
-)
-def test_storage_provider_empty_cache_config(storage_provider_empty_cache_config, temp_data_store_type):
-    with temp_data_store_type() as temp_store:
-        config_dict = storage_provider_empty_cache_config(temp_store.profile_config_dict())
-        with pytest.raises(RuntimeError) as exc_info:
-            StorageClientConfig.from_dict(config_dict)
-        assert "Failed to validate the config file" in str(exc_info.value)
-        assert "'eviction_policy' is a required property" in str(exc_info.value)
 
 
 @pytest.fixture

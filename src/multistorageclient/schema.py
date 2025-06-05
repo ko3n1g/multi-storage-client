@@ -101,7 +101,6 @@ CACHE_SCHEMA = {
             },
         },
     },
-    "required": ["eviction_policy"],
     "additionalProperties": False,
 }
 

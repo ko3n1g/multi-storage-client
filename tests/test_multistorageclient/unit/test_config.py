@@ -824,22 +824,17 @@ def test_invalid_cache_config():
     ):
         StorageClientConfig.from_dict(config_dict, "test")
 
-
-def test_mixed_cache_config():
-    """Test that mixing old and new cache config formats raises an error."""
+    # Relative location is not allowed
     config_dict = {
         "profiles": {"test": {"storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}}}},
         "cache": {
-            "size_mb": 20000,
+            "size": "200G",
             "use_etag": True,
-            "location": "/tmp/msc_cache",
-            "eviction_policy": {"policy": "fifo", "refresh_interval": 300},
-            "cache_backend": {"storage_provider_profile": "s3e"},
+            "location": "relative/path",
         },
     }
 
-    # Should raise an error because size_mb is no longer supported
-    with pytest.raises(ValueError, match="The 'size_mb' and 'location' properties are no longer supported"):
+    with pytest.raises(ValueError, match="Cache location must be an absolute path: relative/path"):
         StorageClientConfig.from_dict(config_dict, "test")
 
 

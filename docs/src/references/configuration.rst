@@ -341,11 +341,7 @@ Cache
 *****
 
 The MSC cache configuration allows you to specify caching behavior for improved performance. The cache stores
-files locally for faster access on subsequent reads. It maintains a maximum size limit and automatically evicts files
-when the limit is reached. The cache validates file freshness using ETags when enabled. Storage-provider-based cache backend is an
-early access feature that doesn't yet support all storage providers or cache eviction and cleanup operations.
-
-Note: These cache changes are backward compatible with previous cache configuration.
+files locally for faster access on subsequent reads. The cache is shared across all profiles.
 
 Options:
 
@@ -353,46 +349,37 @@ Options:
 
   * Maximum cache size with unit (e.g. ``"100M"``, ``"1G"``) (optional, default: ``"10G"``)
 
+* ``location``
+
+  * Absolute filesystem path for storing cached files (optional, default: system temporary directory + ``"/msc_cache"``)
+
 * ``use_etag``
 
-  * Use ETag for cache validation (optional, default: ``true``)
+  * Use ETag for cache validation, it introduces a small overhead by checking the Etag agains the remote object on every read (optional, default: ``true``)
 
-* ``eviction_policy``: Cache eviction policy configuration
+* ``eviction_policy``: Cache eviction policy configuration (optional, default policy is ``"fifo"``)
 
-  * ``policy``: Eviction policy type (``"fifo"``, ``"lru"``, ``"random"``) (optional, default: ``"fifo"``)
+  * ``policy``: Eviction policy type (``"fifo"``, ``"lru"``, ``"random"``)
 
-  * ``refresh_interval``: Interval in seconds to refresh cache (optional, default: ``300``)
+  * ``refresh_interval``: Interval in seconds to trigger cache eviction (optional, default: ``300``)
 
-* ``cache_backend``: Cache backend configuration
-
-  * ``cache_path``: Directory path for storing cached files (optional, default: system temp directory + ``"/.msc_cache"``)
-
-  * ``storage_provider_profile``: Optional profile to use for cache storage, should point to a valid AWS S3 Express profile. If not provided, file system cache backend is used (recommended to use a separate read-only profile) (optional, default: file system cache backend)
 
 .. code-block:: yaml
-   :caption: Example configuration when using a storage provider based cache backend.
+   :caption: Example configuration to enable basic cache.
 
    cache:
-     size: "10M"
-     use_etag: true
-     eviction_policy:
-       policy: fifo
-       refresh_interval: 300
-     cache_backend:
-       cache_path: tmp/msc_cache
-       storage_provider_profile: s3-express-profile
+     size: 500G
+     location: /path/to/msc_cache
 
 .. code-block:: yaml
-   :caption: Example configuration when using a filesystem based cache backend (local cache). Note that the storage_provider_profile is not provided.
+   :caption: Example configuration to configure cache eviction policy.
 
    cache:
-     size: "10M"
-     use_etag: true
+     size: 500G
+     location: /path/to/msc_cache
      eviction_policy:
-       policy: fifo
-       refresh_interval: 300
-     cache_backend:
-       cache_path: /tmp/msc_cache
+       policy: lru
+       refresh_interval: 3600
 
 *************
 OpenTelemetry

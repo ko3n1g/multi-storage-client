@@ -19,6 +19,7 @@ import os
 import tempfile
 from collections import defaultdict
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -484,21 +485,18 @@ class StorageClientConfigLoader:
         return cache_manager
 
     def _verify_cache_config(self, cache_dict: dict[str, Any]) -> None:
-        if "size_mb" in cache_dict or "location" in cache_dict:
+        if "size_mb" in cache_dict:
             raise ValueError(
-                "The 'size_mb' and 'location' properties are no longer supported. \n"
+                "The 'size_mb' property is no longer supported. \n"
                 "Please use 'size' with a unit suffix (M, G, T) instead of size_mb.\n"
-                "Please use 'cache_backend.cache_path' to specify the cache path.\n"
                 "Example configuration:\n"
                 "cache:\n"
-                "  size: 20G\n"  # Optional: If not specified, default cache size (10GB) will be used
-                "  use_etag: true\n"  # Optional: If not specified, default cache use_etag (true) will be used
-                "  eviction_policy:\n"  # Required: The eviction policy to use
-                "    policy: fifo\n"  # Required: The eviction policy to use
-                "    refresh_interval: 300\n"  # Optional: If not specified, default cache refresh interval (300 seconds) will be used
-                "  cache_backend:\n"  # Optional: If not specified, default cache backend will be used
-                "    cache_path: tmp/msc_cache\n"  # Optional: If not specified, default cache path (tmp/.msc_cache) will be used
-                "    storage_provider_profile: test-s3e"  # Optional: specify ONLY for object storage backends
+                "  size: 500G               # Optional: If not specified, default cache size (10GB) will be used\n"
+                "  use_etag: true           # Optional: If not specified, default cache use_etag (true) will be used\n"
+                "  location: /tmp/msc_cache # Optional: If not specified, default cache location (system temporary directory + '/msc_cache') will be used\n"
+                "  eviction_policy:         # Optional: The eviction policy to use\n"
+                "    policy: fifo           # Optional: The eviction policy to use, default is 'fifo'\n"
+                "    refresh_interval: 300  # Optional: If not specified, default cache refresh interval (300 seconds) will be used\n"
             )
 
     def build_config(self) -> "StorageClientConfig":
@@ -514,25 +512,37 @@ class StorageClientConfigLoader:
 
         if self._cache_dict is not None:
             tempdir = tempfile.gettempdir()
-            default_location = os.path.join(tempdir, ".msc_cache")
+            default_location = os.path.join(tempdir, "msc_cache")
+            location = self._cache_dict.get("location", default_location)
+
+            if not Path(location).is_absolute():
+                raise ValueError(f"Cache location must be an absolute path: {location}")
 
             # Initialize cache_dict with default values
             cache_dict = self._cache_dict
+
             # Verify cache config
             self._verify_cache_config(cache_dict)
+
+            # Initialize eviction policy
+            if "eviction_policy" in cache_dict:
+                policy = cache_dict["eviction_policy"]["policy"].lower()
+                eviction_policy = EvictionPolicyConfig(
+                    policy=policy,
+                    refresh_interval=cache_dict["eviction_policy"].get(
+                        "refresh_interval", DEFAULT_CACHE_REFRESH_INTERVAL
+                    ),
+                )
+            else:
+                eviction_policy = EvictionPolicyConfig(policy="fifo", refresh_interval=DEFAULT_CACHE_REFRESH_INTERVAL)
 
             # Create cache config from the standardized format
             cache_config = CacheConfig(
                 size=cache_dict.get("size", DEFAULT_CACHE_SIZE),
                 use_etag=cache_dict.get("use_etag", True),
-                eviction_policy=EvictionPolicyConfig(
-                    policy=cache_dict["eviction_policy"]["policy"].lower(),
-                    refresh_interval=cache_dict.get("eviction_policy", {}).get(
-                        "refresh_interval", DEFAULT_CACHE_REFRESH_INTERVAL
-                    ),
-                ),
+                eviction_policy=eviction_policy,
                 backend=CacheBackendConfig(
-                    cache_path=cache_dict.get("cache_backend", {}).get("cache_path", default_location),
+                    cache_path=cache_dict.get("cache_backend", {}).get("cache_path", location),
                     storage_provider_profile=cache_dict.get("cache_backend", {}).get("storage_provider_profile"),
                 ),
             )
