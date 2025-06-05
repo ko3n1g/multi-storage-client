@@ -256,7 +256,14 @@ class StorageClient:
         :param recursive: Whether to delete objects in the path recursively.
         """
         if recursive:
-            self.sync_from(NullStorageClient(), path, path, delete_unmatched_files=True, num_worker_processes=1)
+            self.sync_from(
+                NullStorageClient(),
+                path,
+                path,
+                delete_unmatched_files=True,
+                num_worker_processes=1,
+                description="Deleting",
+            )
             # If this is a posix storage provider, we need to also delete remaining directory stubs.
             if self._is_posix_file_storage_provider():
                 posix_storage_provider = cast(PosixFileStorageProvider, self._storage_provider)
