@@ -7,6 +7,9 @@
 name: Production
 on:
   workflow_call:
+defaults:
+  run:
+    shell: nix develop --command bash -e {0}
 jobs:
   get-tag-message:
     name: Get Tag Message
@@ -18,9 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: get-tag-message
         run: |
-          nix develop --command bash -c "
-            git tag --list --format '%(contents)' ${{ github.ref_name }} | cat <(echo -n 'tag-message=') - >> $GITHUB_OUTPUT
-          "
+          git tag --list --format '%(contents)' ${{ github.ref_name }} | cat <(echo -n 'tag-message=') - >> $GITHUB_OUTPUT
   publish-documentation:
     name: Publish Documentation
     needs:
@@ -44,13 +45,11 @@ jobs:
       #
       # https://github.com/sphinx-doc/sphinx/issues/11739
       - run: |
-          nix develop --command bash -c "
-            echo 'All locales:' &&
-            locale --all-locales &&
-            echo 'Current locale:' &&
-            locale &&
-            LC_ALL=en_US.utf8 just document
-          "
+          echo 'All locales:'
+          locale --all-locales
+          echo 'Current locale:'
+          locale
+          LC_ALL=en_US.utf8 just document
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/dist
@@ -70,7 +69,4 @@ jobs:
       - uses: actions/checkout@v4
       # Skip creation if a release for the tag already exists.
       - run: |
-          nix develop --command bash -c "
-            gh release --repo ${{ github.repository }} view ${{ github.ref_name }} ||
-            gh release --repo ${{ github.repository }} create ${{ github.ref_name }} --latest=$([[ '${{ needs.get-tag-message.outputs.tag-message }}' == 'latest' ]] && echo true || echo false) --notes-file .release_notes/${{ github.ref_name }}.md --title ${{ github.ref_name }} --verify-tag
-          "
+          gh release --repo ${{ github.repository }} view ${{ github.ref_name }} || gh release --repo ${{ github.repository }} create ${{ github.ref_name }} --latest=$([[ '${{ needs.get-tag-message.outputs.tag-message }}' == 'latest' ]] && echo true || echo false) --notes-file .release_notes/${{ github.ref_name }}.md --title ${{ github.ref_name }} --verify-tag
