@@ -21,7 +21,7 @@ import tempfile
 import pytest
 
 from multistorageclient import StorageClient, StorageClientConfig
-from multistorageclient.config import SimpleProviderBundle
+from multistorageclient.config import SimpleProviderBundle, _find_config_file_paths
 from multistorageclient.providers import (
     ManifestMetadataProvider,
     PosixFileStorageProvider,
@@ -881,3 +881,44 @@ def test_path_mapping_section() -> None:
         "/data/datasets/": "msc://default/",
         "https://example.com/data/": "msc://default/",
     }
+
+
+def test_find_config_file_paths():
+    os.environ["HOME"] = "/home/testuser"
+
+    paths = _find_config_file_paths()
+
+    expected_paths = (
+        "/home/testuser/.msc_config.yaml",
+        "/home/testuser/.msc_config.json",
+        "/home/testuser/.config/msc/config.yaml",
+        "/home/testuser/.config/msc/config.json",
+        "/etc/xdg/msc/config.yaml",
+        "/etc/xdg/msc/config.json",
+        "/etc/msc_config.yaml",
+        "/etc/msc_config.json",
+    )
+
+    assert paths == expected_paths
+
+    os.environ["XDG_CONFIG_HOME"] = "/custom/config"
+    os.environ["XDG_CONFIG_DIRS"] = "/opt/config:/usr/local/etc"
+
+    paths = _find_config_file_paths()
+
+    expected_paths = (
+        "/custom/config/msc/config.yaml",
+        "/custom/config/msc/config.json",
+        "/home/testuser/.msc_config.yaml",
+        "/home/testuser/.msc_config.json",
+        "/home/testuser/.config/msc/config.yaml",
+        "/home/testuser/.config/msc/config.json",
+        "/opt/config/msc/config.yaml",
+        "/opt/config/msc/config.json",
+        "/usr/local/etc/msc/config.yaml",
+        "/usr/local/etc/msc/config.json",
+        "/etc/msc_config.yaml",
+        "/etc/msc_config.json",
+    )
+
+    assert paths == expected_paths

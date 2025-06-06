@@ -103,16 +103,67 @@ CREDENTIALS_PROVIDER_MAPPING = {
     "GoogleIdentityPoolCredentialsProvider": "GoogleIdentityPoolCredentialsProvider",
 }
 
-DEFAULT_MSC_CONFIG_FILE_SEARCH_PATHS = (
-    # Yaml
-    "/etc/msc_config.yaml",
-    os.path.join(os.getenv("HOME", ""), ".config", "msc", "config.yaml"),
-    os.path.join(os.getenv("HOME", ""), ".msc_config.yaml"),
-    # Json
-    "/etc/msc_config.json",
-    os.path.join(os.getenv("HOME", ""), ".config", "msc", "config.json"),
-    os.path.join(os.getenv("HOME", ""), ".msc_config.json"),
-)
+
+def _find_config_file_paths():
+    """
+    Get configuration file search paths.
+
+    Returns paths in order of precedence:
+
+    1. User-specific config (${XDG_CONFIG_HOME}/msc/, ${HOME}/, ${HOME}/.config/msc/)
+    2. System-wide configs (${XDG_CONFIG_DIRS}/msc/, /etc/xdg, /etc/)
+    """
+    paths = []
+
+    # 1. User-specific configuration directory
+    xdg_config_home = os.getenv("XDG_CONFIG_HOME")
+
+    if xdg_config_home:
+        paths.extend(
+            [
+                os.path.join(xdg_config_home, "msc", "config.yaml"),
+                os.path.join(xdg_config_home, "msc", "config.json"),
+            ]
+        )
+
+    user_home = os.getenv("HOME")
+
+    if user_home:
+        paths.extend(
+            [
+                os.path.join(user_home, ".msc_config.yaml"),
+                os.path.join(user_home, ".msc_config.json"),
+                os.path.join(user_home, ".config", "msc", "config.yaml"),
+                os.path.join(user_home, ".config", "msc", "config.json"),
+            ]
+        )
+
+    # 2. System-wide configuration directories
+    xdg_config_dirs = os.getenv("XDG_CONFIG_DIRS")
+    if not xdg_config_dirs:
+        xdg_config_dirs = "/etc/xdg"
+
+    for config_dir in xdg_config_dirs.split(":"):
+        config_dir = config_dir.strip()
+        if config_dir:
+            paths.extend(
+                [
+                    os.path.join(config_dir, "msc", "config.yaml"),
+                    os.path.join(config_dir, "msc", "config.json"),
+                ]
+            )
+
+    paths.extend(
+        [
+            "/etc/msc_config.yaml",
+            "/etc/msc_config.json",
+        ]
+    )
+
+    return tuple(paths)
+
+
+DEFAULT_MSC_CONFIG_FILE_SEARCH_PATHS = _find_config_file_paths()
 
 PACKAGE_NAME = "multistorageclient"
 

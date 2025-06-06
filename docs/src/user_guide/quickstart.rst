@@ -40,9 +40,11 @@ File-Based
 File-based configurations can be written in YAML or JSON format. The MSC will search for configuration files in the following locations (in order):
 
 #. Path specified by ``MSC_CONFIG`` environment variable
+#. ``${XDG_CONFIG_HOME}/msc/config.yaml`` or ``${XDG_CONFIG_HOME}/msc/config.json``
+#. ``${HOME}/.msc_config.yaml`` or ``${HOME}/.msc_config.json``
+#. ``${HOME}/.config/msc/config.yaml`` or ``${HOME}/.config/msc/config.json``
+#. ``${XDG_CONFIG_DIRS:-/etc/xdg}/msc/config.yaml`` or ``${XDG_CONFIG_DIRS:-/etc/xdg}/msc/config.json``
 #. ``/etc/msc_config.yaml`` or ``/etc/msc_config.json``
-#. ``~/.config/msc/config.yaml`` or ``~/.config/msc/config.json``
-#. ``~/.msc_config.yaml`` or ``~/.msc_config.json``
 
 You can explicitly specify a configuration file by setting the ``MSC_CONFIG`` environment variable:
 
