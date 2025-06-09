@@ -16,6 +16,7 @@
 import argparse
 import json
 import os
+import shutil
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +37,8 @@ DEFAULT_CONFIG = {
         "64MB": 800,
     },
 }
+
+DEFAULT_TEST_DIR = "/tmp/msc_benchmark"
 
 
 def load_config(config_path: Optional[str]) -> dict[str, Any]:
@@ -128,6 +131,8 @@ class BenchmarkRunner:
         processes: Optional[list[int]] = None,
         threads: Optional[list[int]] = None,
         prefix: str = "",
+        include_file_tests: bool = False,
+        file_tests_dir: str = DEFAULT_TEST_DIR,
     ) -> None:
         """Initialize the benchmark runner with a storage client and test parameters.
 
@@ -137,13 +142,16 @@ class BenchmarkRunner:
             processes: List of process counts to test with
             threads: List of thread counts to test with
             prefix: Path prefix to use for storing test objects
+            include_file_tests: Whether to run upload_file and download_file tests
+            file_tests_dir: Path to the directory to be used for upload_file/download_file test
         """
         self.storage_client = storage_client
         self.test_sizes = test_sizes or DEFAULT_CONFIG["test_object_sizes"]
         self.processes = processes or DEFAULT_CONFIG["processes"]
         self.threads = threads or DEFAULT_CONFIG["threads"]
         self.prefix = prefix
-
+        self.include_file_tests = include_file_tests
+        self.file_tests_dir = file_tests_dir
         # Pre-generate random data
         self.random_data = {k: os.urandom(size_to_bytes(k)) for k in self.test_sizes.keys()}
 
@@ -176,11 +184,60 @@ class BenchmarkRunner:
         except Exception as e:
             print(f"Error deleting {path}: {e}")
 
+    def create_files(self, size: str, num_files: int) -> None:
+        """Create files of the specified size with random data."""
+        os.makedirs(self.file_tests_dir, exist_ok=True)
+        # Guardrail: abort early if required space exceeds 90% of free space
+        required = size_to_bytes(size) * num_files
+        free = shutil.disk_usage(self.file_tests_dir).free
+        if required > free * 0.9:
+            raise RuntimeError(
+                f"Refusing to generate {required / 1_048_576:.1f} MiB testing files - "
+                f"only {free / 1_048_576:.1f} MiB free in {self.file_tests_dir}"
+            )
+
+        print(f"Generating {num_files} test files of size {size} in {self.file_tests_dir}")
+        for i in range(num_files):
+            file_path = os.path.join(self.file_tests_dir, f"test-{size}-{i}")
+            with open(file_path, "wb") as f:
+                f.write(self.random_data[size])
+
+    def upload_file(self, size: str, remote_path: str, local_path: str, metrics: PerformanceMetrics) -> None:
+        """Upload a file from local filesystem to storage and record metrics."""
+        start_time = time.time()
+        try:
+            self.storage_client.upload_file(remote_path=remote_path, local_path=local_path)
+        except Exception as e:
+            print(f"Error uploading file {local_path} to {remote_path}: {e}")
+        end_time = time.time()
+        metrics.record(start_time, end_time, size_to_bytes(size))
+
+    def download_file(self, size: str, remote_path: str, local_path: str, metrics: PerformanceMetrics) -> None:
+        """Download a file from storage to local filesystem and record metrics."""
+        start_time = time.time()
+        try:
+            self.storage_client.download_file(remote_path=remote_path, local_path=local_path)
+        except Exception as e:
+            print(f"Error downloading file {remote_path} to {local_path}: {e}")
+        end_time = time.time()
+        metrics.record(start_time, end_time, size_to_bytes(size))
+
+    def cleanup_test_dir(self) -> None:
+        """Delete the test directory with all files inside."""
+        abs_dir = os.path.abspath(self.file_tests_dir)
+        if abs_dir in {"/", "", "/home", "/var", "/etc", os.path.expanduser("~")}:
+            raise ValueError(f"Refusing to delete unsafe path: {abs_dir}")
+        try:
+            shutil.rmtree(abs_dir)
+        except Exception as e:
+            print(f"Error deleting test directory {self.file_tests_dir}: {e}")
+
     def task(self, test_type: str, bucket: str, size: str, i: int, metrics: PerformanceMetrics) -> None:
-        """Execute a single task (upload, download, or delete)."""
+        """Execute a single task (upload, download, delete, upload_file, download_file)."""
         object_name_prefix = f"test-{size}"
         object_name = f"{object_name_prefix}-{i}"
         object_path = os.path.join(bucket, object_name)
+        local_path = os.path.join(self.file_tests_dir, f"test-{size}-{i}")
 
         if test_type == "upload":
             self.upload_object(size, object_path, metrics)
@@ -188,6 +245,12 @@ class BenchmarkRunner:
             self.download_object(object_path, metrics)
         elif test_type == "delete":
             self.delete_object(object_path)
+        elif test_type == "upload_file":
+            self.upload_file(size, object_path, local_path, metrics)
+        elif test_type == "download_file":
+            self.download_file(size, object_path, local_path, metrics)
+        else:
+            raise ValueError(f"Invalid task type: {test_type}")
 
     def process_task(
         self,
@@ -244,11 +307,20 @@ class BenchmarkRunner:
     def run_all_tests(self) -> None:
         """Run all benchmark tests with the configured parameters."""
         for size_str, objects in self.test_sizes.items():
-            for processes in self.processes:
-                for threads in self.threads:
-                    self.run_test("upload", self.prefix, size_str, objects, processes, threads)
-                    self.run_test("download", self.prefix, size_str, objects, processes, threads)
-                    self.run_test("delete", self.prefix, size_str, objects, processes, threads)
+            try:
+                if self.include_file_tests:
+                    self.create_files(size_str, objects)
+                for processes in self.processes:
+                    for threads in self.threads:
+                        self.run_test("upload", self.prefix, size_str, objects, processes, threads)
+                        self.run_test("download", self.prefix, size_str, objects, processes, threads)
+                        if self.include_file_tests:
+                            self.run_test("upload_file", self.prefix, size_str, objects, processes, threads)
+                            self.run_test("download_file", self.prefix, size_str, objects, processes, threads)
+                        self.run_test("delete", self.prefix, size_str, objects, processes, threads)
+            finally:
+                if self.include_file_tests:
+                    self.cleanup_test_dir()
 
 
 def main() -> None:
@@ -256,6 +328,17 @@ def main() -> None:
     parser.add_argument("--prefix", type=str, default="", help="The path prefix to use for the test")
     parser.add_argument("--config", type=str, help="Path to configuration file")
     parser.add_argument("--profile", type=str, required=True, help="MSC profile to use")
+    parser.add_argument(
+        "--include-file-tests",
+        action="store_true",
+        help="Include additional file-based tests (use upload_file and download_file)",
+    )
+    parser.add_argument(
+        "--file-tests-dir",
+        type=str,
+        default=DEFAULT_TEST_DIR,
+        help=f"Directory for file-based tests (if --include-file-tests is used). This directory will be deleted after test finishes, do NOT specify a directory containing important files). Default: {DEFAULT_TEST_DIR}",
+    )
     args = parser.parse_args()
 
     # Load configuration
@@ -270,7 +353,13 @@ def main() -> None:
 
     # Create and run the benchmark
     benchmark = BenchmarkRunner(
-        storage_client, prefix=args.prefix, processes=processes, threads=threads, test_sizes=test_object_sizes
+        storage_client,
+        prefix=args.prefix,
+        processes=processes,
+        threads=threads,
+        test_sizes=test_object_sizes,
+        include_file_tests=args.include_file_tests,
+        file_tests_dir=args.file_tests_dir,
     )
     benchmark.run_all_tests()
 
