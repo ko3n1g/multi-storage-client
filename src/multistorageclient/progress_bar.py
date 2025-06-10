@@ -12,10 +12,8 @@ class ProgressBar:
 
         # Initialize progress bar based on the 'total_items' provided at creation.
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}{postfix}]"
-        self.pbar = (
-            tqdm(total=total_items, desc=desc, bar_format=bar_format, file=sys.stdout, dynamic_ncols=True, position=0)
-            if show_progress
-            else None
+        self.pbar = tqdm(
+            total=total_items, desc=desc, bar_format=bar_format, file=sys.stdout, dynamic_ncols=True, position=0
         )
 
     def update_total(self, new_total: int) -> None:

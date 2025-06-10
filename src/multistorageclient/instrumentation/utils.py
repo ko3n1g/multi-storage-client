@@ -430,13 +430,12 @@ def file_tracer(func: Callable) -> Callable:
         finally:
             # Close spans when file is closed
             if function_name == "close":
-                if current_op_span is not None:
-                    # Set final operation count before closing
-                    current_op_span.set_attribute("operation_count", current_op_count)  # pyright: ignore[reportOptionalMemberAccess]
-                    current_op_span.end()
-                    setattr(managed_file_instance, "_current_op_span", None)
-                    setattr(managed_file_instance, "_current_op_type", None)
-                    setattr(managed_file_instance, "_current_op_count", 0)
+                # Set final operation count before closing
+                current_op_span.set_attribute("operation_count", current_op_count)  # pyright: ignore[reportOptionalMemberAccess]
+                current_op_span.end()  # pyright: ignore[reportOptionalMemberAccess]
+                setattr(managed_file_instance, "_current_op_span", None)
+                setattr(managed_file_instance, "_current_op_type", None)
+                setattr(managed_file_instance, "_current_op_count", 0)
                 if parent_trace_span:
                     parent_trace_span.end()
                     managed_file_instance._trace_span = None
