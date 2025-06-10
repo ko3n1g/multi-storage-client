@@ -206,7 +206,6 @@ class FileSystemBackend(CacheBackend):
             os.path.join(self._cache_path, ".cache_refresh.lock"), timeout=self.DEFAULT_FILE_LOCK_TIMEOUT
         )
 
-        print("[Filesystem backend] initializing cache backend")
         # Populate cache with existing files in the cache directory
         self.refresh_cache()
 

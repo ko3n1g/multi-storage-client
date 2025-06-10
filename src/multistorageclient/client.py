@@ -280,8 +280,7 @@ class StorageClient:
         # Delete the cached file if it exists
         if self._is_cache_enabled():
             assert self._cache_manager is not None
-            cache_path = self._build_cache_path(path)
-            self._cache_manager.delete(cache_path)
+            self._cache_manager.delete(virtual_path)
 
         self._storage_provider.delete_object(path)
 
