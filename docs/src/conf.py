@@ -43,6 +43,8 @@ viewcode_line_numbers = True
 # Docstrings.
 autoclass_content = "both"
 autodoc_typehints = "both"
+add_module_names = False
+toc_object_entries_show_parents = "hide"
 
 # Intersphinx.
 intersphinx_mapping = {

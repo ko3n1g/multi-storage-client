@@ -2,11 +2,29 @@
 API Reference
 #############
 
-****
-Core
-****
+**************
+Storage Client
+**************
 
-.. automodule:: multistorageclient
+.. autoclass:: multistorageclient.StorageClient
+   :members:
+
+.. autoclass:: multistorageclient.StorageClientConfig
+   :members:
+
+*******
+Pathlib
+*******
+
+.. automodule:: multistorageclient.pathlib
+   :members:
+   :undoc-members:
+
+*********
+Shortcuts
+*********
+
+.. automodule:: multistorageclient.shortcuts
    :members:
    :undoc-members:
 

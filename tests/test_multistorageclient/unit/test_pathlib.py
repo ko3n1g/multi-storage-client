@@ -60,6 +60,8 @@ def test_path_basic():
         assert not path1.is_socket()
         assert not path1.is_mount()
         assert path1.samefile(path1)
+        assert path1.resolve() == msc.Path(f"{Path(temp_dir).resolve()}/dir1/testfile.txt")
+        assert path1.absolute() == path1
 
         path2 = msc.Path(f"{temp_dir}/dir1/")
         assert path2.exists()
@@ -89,6 +91,13 @@ def test_path_basic():
 
         path8 = msc.Path(f"{temp_dir}/dir1/testfile-3.txt")
         assert path8.as_posix() == f"{temp_dir}/dir1/testfile-3.txt"
+
+        path9 = msc.Path(f"{temp_dir}/dir1/testfile-4.txt")
+        assert not path9.exists()
+        path9.touch()
+        assert path9.exists()
+        assert path9.is_file()
+        assert path9.stat().st_size == 0
 
 
 def test_path_hierarchy(file_storage_config):
@@ -130,10 +139,28 @@ def test_path_mkdir_rmdir(file_storage_config):
 
 def test_path_glob(file_storage_config):
     with tempfile.TemporaryDirectory() as temp_dir:
+        create_file(msc.Path(f"{temp_dir}/dir1/testfile.txt"))
         create_file(msc.Path(f"{temp_dir}/dir1/dir2/testfile.txt"))
+        create_file(msc.Path(f"{temp_dir}/dir1/dir3/testfile.txt"))
 
         path = msc.Path(f"{temp_dir}/")
-        assert list(path.glob("**/*.txt")) == [msc.Path(f"{temp_dir}/dir1/dir2/testfile.txt")]
+        assert list(path.glob("*")) == [msc.Path(f"{temp_dir}/dir1")]
+        assert list(path.glob("dir1/*")) == [
+            msc.Path(f"{temp_dir}/dir1/dir2"),
+            msc.Path(f"{temp_dir}/dir1/dir3"),
+            msc.Path(f"{temp_dir}/dir1/testfile.txt"),
+        ]
+        assert list(path.glob("dir1/dir2/*")) == [msc.Path(f"{temp_dir}/dir1/dir2/testfile.txt")]
+        assert list(path.glob("**/*.txt")) == [
+            msc.Path(f"{temp_dir}/dir1/testfile.txt"),
+            msc.Path(f"{temp_dir}/dir1/dir2/testfile.txt"),
+            msc.Path(f"{temp_dir}/dir1/dir3/testfile.txt"),
+        ]
+        assert list(path.rglob("*.txt")) == [
+            msc.Path(f"{temp_dir}/dir1/testfile.txt"),
+            msc.Path(f"{temp_dir}/dir1/dir2/testfile.txt"),
+            msc.Path(f"{temp_dir}/dir1/dir3/testfile.txt"),
+        ]
 
 
 def test_shutil_rmtree(file_storage_config):
@@ -164,8 +191,9 @@ def verify_pathlib(profile: str, prefix: str):
         with msc.Path(f"msc://{profile}/{prefix}/data-{i}.bin").open("wb") as fp:
             fp.write(body)
 
-    # glob
+    # glob, rglob
     assert len(list(msc.Path(f"msc://{profile}/{prefix}").glob("**/*.bin"))) == 10
+    assert len(list(msc.Path(f"msc://{profile}/{prefix}").rglob("*.bin"))) == 10
     assert len(list(msc.Path(f"msc://{profile}/{prefix}/").iterdir())) == 10
 
     # match
@@ -185,6 +213,8 @@ def verify_pathlib(profile: str, prefix: str):
     path = msc.Path(f"msc://{profile}/{prefix}/data-0.bin")
     assert str(path) == f"msc://{profile}/{prefix}/data-0.bin"
     assert path.exists()
+    assert path.resolve() == path
+    assert path.absolute() == path
     assert path.parent == msc.Path(f"msc://{profile}/{prefix}")
     assert path.parents == [msc.Path(f"msc://{profile}/{prefix}"), msc.Path(f"msc://{profile}")]
     assert path.is_file()
@@ -225,6 +255,16 @@ def verify_pathlib(profile: str, prefix: str):
     path7.as_posix().startswith(tempfile.gettempdir())
     assert Path(path7.as_posix()).exists()
 
+    # touch
+    path8 = msc.Path(f"msc://{profile}/{prefix}/data-1.bin")
+    path8.touch()
+    assert path8.exists()
+    path9 = msc.Path(f"msc://{profile}/{prefix}/data-99.bin")
+    assert not path9.exists()
+    path9.touch()
+    assert path9.exists()
+    assert path9.stat().st_size == 0
+
 
 @pytest.mark.parametrize(
     argnames=["temp_data_store_type"],
@@ -233,7 +273,7 @@ def verify_pathlib(profile: str, prefix: str):
         [tempdatastore.TemporaryAWSS3Bucket],
     ],
 )
-def test_pathlib_with_s3(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
+def test_pathlib_local_and_remote(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
     # Clear the instance cache to ensure that the config is not reused from the previous test
     msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
 

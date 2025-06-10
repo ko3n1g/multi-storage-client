@@ -139,26 +139,46 @@ class MultiStoragePath:
 
     @property
     def anchor(self) -> str:
+        """
+        The concatenation of the drive and root, or ''.
+        """
         return self._internal_path.anchor
 
     @property
     def name(self) -> str:
+        """
+        The final path component, if any.
+        """
         return self._internal_path.name
 
     @property
     def suffix(self) -> str:
+        """
+        The final path component, if any.
+        """
         return self._internal_path.suffix
 
     @property
     def suffixes(self) -> list[str]:
+        """
+        A list of the final component's suffixes, if any.
+
+        These include the leading periods. For example: ['.tar', '.gz']
+        """
         return self._internal_path.suffixes
 
     @property
     def stem(self) -> str:
+        """
+        The final path component, minus its last suffix.
+        """
         return self._internal_path.stem
 
     @property
     def parent(self) -> "MultiStoragePath":
+        """
+        The logical parent of the path.
+        """
         parent_path = self._internal_path.parent
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(parent_path))
@@ -166,6 +186,9 @@ class MultiStoragePath:
 
     @property
     def parents(self) -> list["MultiStoragePath"]:
+        """
+        A sequence of this path's logical parents.
+        """
         if self._storage_client.is_default_profile():
             return [MultiStoragePath(str(p)) for p in self._internal_path.parents]
         else:
@@ -176,9 +199,20 @@ class MultiStoragePath:
 
     @property
     def parts(self):
+        """
+        An object providing sequence-like access to the components in the filesystem path (does not
+        include the msc:// and the profile name).
+        """
         return self._internal_path.parts
 
     def as_posix(self) -> str:
+        """
+        Return the string representation of the path with forward (/) slashes.
+
+        If the path is a remote path, the file content is downloaded to local storage
+        (either cached or temporary file) and the local filesystem path is returned.
+        This enables access to remote file content through standard filesystem operations.
+        """
         if self._storage_client.is_default_profile():
             return self._internal_path.as_posix()
 
@@ -187,10 +221,15 @@ class MultiStoragePath:
             return fp.resolve_filesystem_path()
 
     def is_absolute(self) -> bool:
-        # Paths are always absolute
+        """
+        Paths are always absolute.
+        """
         return True
 
     def is_relative_to(self, other: "MultiStoragePath") -> bool:
+        """
+        Return True if the path is relative to another path or False.
+        """
         return isinstance(other, MultiStoragePath) and self._internal_path.is_relative_to(other._internal_path)
 
     def is_reserved(self) -> bool:
@@ -199,12 +238,21 @@ class MultiStoragePath:
         raise NotImplementedError("MultiStoragePath.is_reserved() is unsupported for remote storage paths")
 
     def match(self, pattern) -> bool:
+        """
+        Return True if this path matches the given pattern.
+        """
         return Path(self._internal_path).match(pattern)
 
     def relative_to(self, other: "MultiStoragePath") -> "MultiStoragePath":
+        """
+        Not implemented.
+        """
         raise NotImplementedError("MultiStoragePath.relative_to() is unsupported")
 
     def with_name(self, name: str) -> "MultiStoragePath":
+        """
+        Return a new path with the file name changed.
+        """
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(self._internal_path.with_name(name)))
         else:
@@ -213,6 +261,9 @@ class MultiStoragePath:
             )
 
     def with_stem(self, stem: str) -> "MultiStoragePath":
+        """
+        Return a new path with the stem changed.
+        """
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(self._internal_path.with_stem(stem)))
         else:
@@ -221,6 +272,10 @@ class MultiStoragePath:
             )
 
     def with_suffix(self, suffix: str) -> "MultiStoragePath":
+        """
+        Return a new path with the file suffix changed. If the path has no suffix, add given suffix.
+        If the given suffix is an empty string, remove the suffix from the path.
+        """
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(self._internal_path.with_suffix(suffix)))
         else:
@@ -231,6 +286,9 @@ class MultiStoragePath:
             )
 
     def with_segments(self, *pathsegments) -> "MultiStoragePath":
+        """
+        Construct a new path object from any number of path-like objects.
+        """
         if self._storage_client.is_default_profile():
             new_path = self._internal_path.joinpath(*pathsegments)
             return MultiStoragePath(str(new_path))
@@ -242,27 +300,48 @@ class MultiStoragePath:
 
     @classmethod
     def home(cls):
+        """
+        Return a new path pointing to the user's home directory.
+        """
         return Path.home()
 
     def expanduser(self):
+        """
+        Return a new path with expanded ~ and ~user constructs (as returned by os.path.expanduser).
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).expanduser()
         raise NotImplementedError("MultiStoragePath.expanduser() is unsupported for remote storage paths")
 
     @classmethod
     def cwd(cls):
+        """
+        Return a new path pointing to the current working directory.
+        """
         return Path.cwd()
 
     def absolute(self):
-        # Paths are always absolute
+        """
+        Return the path itself since it is always absolute.
+        """
         return self
 
     def resolve(self, strict=False):
+        """
+        Return the absolute path.
+        """
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(Path(self._internal_path).resolve(strict=strict)))
-        raise NotImplementedError("MultiStoragePath.resolve() is unsupported for remote storage paths")
+        return MultiStoragePath(join_paths(f"{MSC_PROTOCOL}{self._storage_client.profile}", str(self._internal_path)))
 
     def readlink(self):
+        """
+        Return the path to which the symbolic link points.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return MultiStoragePath(str(Path(self._internal_path).readlink()))
         raise NotImplementedError("MultiStoragePath.readlink() is unsupported for remote storage paths")
@@ -270,18 +349,32 @@ class MultiStoragePath:
     # Querying file type and status
 
     def stat(self):
+        """
+        Return the result of the stat() system call on this path, like os.stat() does.
+
+        If the path is a remote path, the result is a :py:class:`multistorageclient.pathlib.StatResult` object.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).stat()
         info = self._storage_client.info(str(self._internal_path))
         return StatResult(info)
 
     def lstat(self):
+        """
+        Like stat(), except if the path points to a symlink, the symlink's status information
+        is returned, rather than its target's.
+
+        If the path is a remote path, the result is a :py:class:`multistorageclient.pathlib.StatResult` object.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).lstat()
         info = self._storage_client.info(str(self._internal_path))
         return StatResult(info)
 
     def exists(self) -> bool:
+        """
+        Return True if the path exists.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).exists()
         else:
@@ -292,6 +385,9 @@ class MultiStoragePath:
                 return False
 
     def is_file(self, strict: bool = True) -> bool:
+        """
+        Return True if the path exists and is a regular file.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_file()
         else:
@@ -310,6 +406,9 @@ class MultiStoragePath:
                 return False
 
     def is_dir(self, strict: bool = True) -> bool:
+        """
+        Return True if the path exists and is a directory.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_dir()
         else:
@@ -328,36 +427,71 @@ class MultiStoragePath:
                 return False
 
     def is_symlink(self):
+        """
+        Return True if the path exists and is a symbolic link.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_symlink()
         raise NotImplementedError("MultiStoragePath.is_symlink() is unsupported for remote storage paths")
 
     def is_mount(self):
+        """
+        Return True if the path exists and is a mount point.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_mount()
         raise NotImplementedError("MultiStoragePath.is_mount() is unsupported for remote storage paths")
 
     def is_socket(self):
+        """
+        Return True if the path exists and is a socket.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_socket()
         raise NotImplementedError("MultiStoragePath.is_socket() is unsupported for remote storage paths")
 
     def is_fifo(self):
+        """
+        Return True if the path exists and is a FIFO.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_fifo()
         raise NotImplementedError("MultiStoragePath.is_fifo() is unsupported for remote storage paths")
 
     def is_block_device(self):
+        """
+        Return True if the path exists and is a block device.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_block_device()
         raise NotImplementedError("MultiStoragePath.is_block_device() is unsupported for remote storage paths")
 
     def is_char_device(self):
+        """
+        Return True if the path exists and is a character device.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).is_char_device()
         raise NotImplementedError("MultiStoragePath.is_char_device() is unsupported for remote storage paths")
 
     def samefile(self, other_path):
+        """
+        Return True if both paths point to the same file or directory.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).samefile(other_path)
         return self == other_path
@@ -373,6 +507,9 @@ class MultiStoragePath:
         newline=None,
         check_source_version=SourceVersionCheckMode.INHERIT,
     ):
+        """
+        Open the file and return a file object.
+        """
         return self._storage_client.open(
             str(self._internal_path),
             mode=mode,
@@ -382,20 +519,35 @@ class MultiStoragePath:
         )
 
     def read_bytes(self) -> bytes:
+        """
+        Open the file in bytes mode, read it, and close the file.
+        """
         return self._storage_client.read(str(self._internal_path))
 
     def read_text(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+        """
+        Open the file in text mode, read it, and close the file.
+        """
         return self._storage_client.read(str(self._internal_path)).decode(encoding)
 
     def write_bytes(self, data: bytes) -> None:
+        """
+        Open the file in bytes mode, write to it, and close the file.
+        """
         self._storage_client.write(str(self._internal_path), data)
 
     def write_text(self, data: str, encoding: str = "utf-8", errors: str = "strict") -> None:
+        """
+        Open the file in text mode, write to it, and close the file.
+        """
         self._storage_client.write(str(self._internal_path), data.encode(encoding))
 
     # Reading directories
 
     def iterdir(self):
+        """
+        Yield path objects of the directory contents.
+        """
         if self._storage_client.is_default_profile():
             for item in Path(self._internal_path).iterdir():
                 yield MultiStoragePath(str(item))
@@ -407,6 +559,10 @@ class MultiStoragePath:
                 yield MultiStoragePath(item.key)
 
     def glob(self, pattern):
+        """
+        Iterate over this subtree and yield all existing files (of any kind, including directories)
+        matching the given relative pattern.
+        """
         if self._storage_client.is_default_profile():
             return [MultiStoragePath(str(p)) for p in Path(self._internal_path).glob(pattern)]
         else:
@@ -416,11 +572,27 @@ class MultiStoragePath:
             ]
 
     def rglob(self, pattern):
+        """
+        Recursively yield all existing files (of any kind, including directories) matching the
+        given relative pattern, anywhere in this subtree.
+        """
         if self._storage_client.is_default_profile():
             return [MultiStoragePath(str(p)) for p in Path(self._internal_path).rglob(pattern)]
-        raise NotImplementedError("MultiStoragePath.rglob() is unsupported for remote storage paths")
+        else:
+            recursive_pattern = f"**/{pattern}"
+            return [
+                MultiStoragePath(str(p))
+                for p in self._storage_client.glob(
+                    str(self._internal_path / recursive_pattern), include_url_prefix=True
+                )
+            ]
 
     def walk(self, top_down=True, on_error=None, follow_symlinks=False):
+        """
+        Walk the directory tree from this directory, similar to os.walk().
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).walk(top_down, on_error, follow_symlinks)  # pyright: ignore[reportAttributeAccessIssue]
         raise NotImplementedError("MultiStoragePath.walk() is unsupported for remote storage paths")
@@ -428,16 +600,33 @@ class MultiStoragePath:
     # Creating files and directories
 
     def touch(self, mode=0o666, exist_ok=False):
+        """
+        Create this file with the given access mode, if it doesn't exist.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).touch(mode, exist_ok)
         else:
-            raise NotImplementedError("MultiStoragePath.touch() is unsupported for remote storage paths")
+            if self.exists():
+                # object storage does not support updating the last modified time of a object without writing the object
+                logger.warning("MultiStoragePath.touch() is not supported for remote storage paths")
+            else:
+                self._storage_client.write(str(self._internal_path), b"")
 
     def mkdir(self, mode=0o777, parents=False, exist_ok=False) -> None:
+        """
+        Create a new directory at this given path.
+
+        For remote storage paths, this operation is a no-op.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).mkdir(mode, parents, exist_ok)
 
     def symlink_to(self, target, target_is_directory=False):
+        """
+        Make this path a symlink pointing to the target path.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).symlink_to(target, target_is_directory)
         else:
@@ -446,6 +635,9 @@ class MultiStoragePath:
     # Renaming and deleting
 
     def rename(self, target) -> "MultiStoragePath":
+        """
+        Rename this path to the target path.
+        """
         if not isinstance(target, MultiStoragePath):
             target = MultiStoragePath(target)
 
@@ -459,12 +651,20 @@ class MultiStoragePath:
         return target
 
     def replace(self, target):
+        """
+        Rename this path to the target path, overwriting if that path exists.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).replace(target)
         else:
             raise NotImplementedError("MultiStoragePath.replace() is unsupported for remote storage paths")
 
     def unlink(self, missing_ok: bool = False) -> None:
+        """
+        Remove this file or link. If the path is a directory, use rmdir() instead.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).unlink(missing_ok=missing_ok)
         else:
@@ -475,6 +675,11 @@ class MultiStoragePath:
                     raise
 
     def rmdir(self) -> None:
+        """
+        Remove this directory. The directory must be empty.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).rmdir()
         else:
@@ -483,22 +688,43 @@ class MultiStoragePath:
     # Permissions and ownership
 
     def owner(self):
+        """
+        Return the login name of the file owner.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).owner()
         raise NotImplementedError("MultiStoragePath.owner() is unsupported for remote storage paths")
 
     def group(self):
+        """
+        Return the group name of the file gid.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             return Path(self._internal_path).group()
         raise NotImplementedError("MultiStoragePath.group() is unsupported for remote storage paths")
 
     def chmod(self, mode):
+        """
+        Change the permissions of the path, like os.chmod().
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).chmod(mode)
         else:
             raise NotImplementedError("MultiStoragePath.chmod() is unsupported for remote storage paths")
 
     def lchmod(self, mode):
+        """
+        Like chmod(), except if the path points to a symlink, the symlink's permissions are changed, rather
+        than its target's.
+
+        Not supported for remote storage paths.
+        """
         if self._storage_client.is_default_profile():
             Path(self._internal_path).lchmod(mode)
         else:

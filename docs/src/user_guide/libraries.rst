@@ -159,7 +159,7 @@ This module provides ``open_consolidated`` for reading Zarr groups from files/ob
 Path
 ****
 
-:py:mod:`multistorageclient.path` aliases the :py:mod:`multistorageclient.contrib.path` module.
+:py:class:`multistorageclient.Path` aliases the :py:class:`multistorageclient.pathlib.MultiStoragePath` class.
 
 This module provides the ``Path`` class for working with paths in a way similar to ``pathlib.Path``.
 
