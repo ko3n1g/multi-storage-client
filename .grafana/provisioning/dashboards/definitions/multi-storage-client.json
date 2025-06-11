@@ -30,7 +30,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Version",
@@ -49,7 +49,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Provider",
@@ -68,7 +68,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Operation",
@@ -87,7 +87,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Status",
@@ -106,7 +106,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Cluster",
@@ -125,7 +125,7 @@
                 "auto_min": "10s",
                 "auto_count": 30,
                 "datasource": {
-                    "type": "datasource",
+                    "type": "prometheus",
                     "uid": "${metrics_source}"
                 },
                 "label": "Node",
@@ -219,7 +219,7 @@
                     "expr": "sum by(multistorageclient_operation) (increase(multistorageclient_request_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -277,7 +277,7 @@
                     "expr": "sum by(multistorageclient_operation) (rate(multistorageclient_request_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -335,7 +335,7 @@
                     "expr": "sum by(multistorageclient_operation, multistorageclient_status) (increase(multistorageclient_response_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -393,7 +393,7 @@
                     "expr": "sum by(multistorageclient_operation, multistorageclient_status) (rate(multistorageclient_response_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -451,7 +451,7 @@
                     "expr": "sum by(multistorageclient_operation, multistorageclient_status) (increase(multistorageclient_data_size_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -509,7 +509,7 @@
                     "expr": "sum by(multistorageclient_operation, multistorageclient_status) (rate(multistorageclient_data_size_sum{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}[$__rate_interval]))",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -587,7 +587,7 @@
                     },
                     "yBuckets": {
                         "mode": "count",
-                        "value": "100"
+                        "value": "50"
                     }
                 }
             },
@@ -603,7 +603,7 @@
                     "expr": "multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -624,6 +624,7 @@
                     "custom": {
                         "drawStyle": "line",
                         "lineInterpolation": "smooth",
+                        "showPoints": "never",
                         "stacking": {
                             "mode": "none"
                         },
@@ -661,7 +662,7 @@
                     "expr": "quantile(1, multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -672,7 +673,7 @@
                     "expr": "quantile(0.999, multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -683,7 +684,7 @@
                     "expr": "quantile(0.99, multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -694,7 +695,7 @@
                     "expr": "quantile(0.9, multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -705,7 +706,7 @@
                     "expr": "quantile(0.5, multistorageclient_data_size{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -755,7 +756,7 @@
                     },
                     "yBuckets": {
                         "mode": "count",
-                        "value": "100"
+                        "value": "50"
                     }
                 }
             },
@@ -771,7 +772,7 @@
                     "expr": "multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -792,6 +793,7 @@
                     "custom": {
                         "drawStyle": "line",
                         "lineInterpolation": "smooth",
+                        "showPoints": "never",
                         "stacking": {
                             "mode": "none"
                         },
@@ -829,7 +831,7 @@
                     "expr": "quantile(1, multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -840,7 +842,7 @@
                     "expr": "quantile(0.999, multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -851,7 +853,7 @@
                     "expr": "quantile(0.99, multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -862,7 +864,7 @@
                     "expr": "quantile(0.9, multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -873,7 +875,7 @@
                     "expr": "quantile(0.5, multistorageclient_latency{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -923,7 +925,7 @@
                     },
                     "yBuckets": {
                         "mode": "count",
-                        "value": "100"
+                        "value": "50"
                     }
                 }
             },
@@ -939,7 +941,7 @@
                     "expr": "multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"}",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -960,6 +962,7 @@
                     "custom": {
                         "drawStyle": "line",
                         "lineInterpolation": "smooth",
+                        "showPoints": "never",
                         "stacking": {
                             "mode": "none"
                         },
@@ -997,7 +1000,7 @@
                     "expr": "quantile(1, multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -1008,7 +1011,7 @@
                     "expr": "quantile(0.999, multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -1019,7 +1022,7 @@
                     "expr": "quantile(0.99, multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -1030,7 +1033,7 @@
                     "expr": "quantile(0.9, multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",
@@ -1041,7 +1044,7 @@
                     "expr": "quantile(0.5, multistorageclient_data_rate{multistorageclient_version=~\"${version}\", multistorageclient_provider=~\"${provider}\", multistorageclient_operation=~\"${operation}\", multistorageclient_status=~\"${status}\", cluster=~\"${cluster}\", node=~\"${node}\"})",
                     "refId": "",
                     "datasource": {
-                        "type": "datasource",
+                        "type": "prometheus",
                         "uid": "${metrics_source}"
                     },
                     "editorMode": "builder",

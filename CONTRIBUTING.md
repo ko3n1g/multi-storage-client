@@ -106,7 +106,7 @@ Key:
 │   # GitLab pipeline entrypoint.
 ├── .gitlab-ci.yml
 │
-│   # Reproducible shell configuration.
+│   # Nix configuration.
 ├── flake.nix
 ├── flake.lock 🤖
 │
@@ -124,7 +124,7 @@ Key:
 
 [Nix](https://nixos.org) is a package manager and build system centered around reproducibility.
 
-For us, Nix's most useful feature is its ability to create reproducible + isolated CLI shells on the same machine which use different versions of the same package (e.g. Java 17 and 21). Shell configurations can be encapsulated in Nix configurations which can be shared across multiple computers.
+For us, Nix's most useful feature is its ability to create reproducible + isolated CLI shells on the same machine which use different versions of the same package (e.g. Java 17 and 21). Shell configurations can be encapsulated in Nix files which can be shared across multiple computers.
 
 The best way to install Nix is with the [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer) ([guide](https://zero-to-nix.com/start/install)).
 
@@ -132,7 +132,7 @@ Once installed, running `nix develop` in a directory with a `flake.nix` will cre
 
 > 🔖
 >
-> If you're on a network with lots of GitHub traffic, you may get a rate limiting error. To work around this, you can either switch networks (e.g. turn off VPN) or add a GitHub personal access token (classic) to your [Nix configuration](https://nixos.org/manual/nix/stable/command-ref/conf-file).
+> If you're on a network with lots of GitHub traffic, you may get a rate limiting error. To work around this, you can either switch networks (e.g. turn off VPN) or add a GitHub personal access token (classic) to your [Nix configuration](https://nix.dev/manual/nix/latest/command-ref/conf-file).
 >
 > ```text
 > access-tokens = github.com=ghp_{rest of token}
@@ -140,7 +140,7 @@ Once installed, running `nix develop` in a directory with a `flake.nix` will cre
 
 ### direnv
 
-[direnv](https://direnv.net) ([🍺](https://formulae.brew.sh/formula/direnv)) is a shell extension which can automatically load and unload environment variables when you enter or leave a specific directory.
+[direnv](https://direnv.net) is a shell extension which can automatically load and unload environment variables when you enter or leave a specific directory.
 
 It can automatically load and unload a Nix environment when we enter and leave a project directory.
 

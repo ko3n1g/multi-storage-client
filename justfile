@@ -59,11 +59,11 @@ start-storage-systems: stop-storage-systems
     cd .minio/sandbox && minio server --config ../minio.yaml --quiet &
 
     # Wait for Azurite.
-    timeout 10s bash -c "until netcat --zero localhost 10000; do sleep 1; done"
+    timeout 30s bash -c "until netcat --zero localhost 10000; do sleep 1; done"
     # Wait for fake-gcs-server.
-    timeout 10s bash -c "until curl --fail --output /dev/null --silent http://localhost:4443/_internal/healthcheck; do sleep 1; done"
+    timeout 30s bash -c "until curl --fail --output /dev/null --silent http://localhost:4443/_internal/healthcheck; do sleep 1; done"
     # Wait for MinIO.
-    timeout 10s bash -c "until curl --fail --output /dev/null --silent http://localhost:9000/minio/health/live; do sleep 1; done"
+    timeout 30s bash -c "until curl --fail --output /dev/null --silent http://localhost:9000/minio/health/live; do sleep 1; done"
 
 # Stop telemetry systems.
 stop-telemetry-systems:
@@ -99,7 +99,7 @@ start-telemetry-systems: stop-telemetry-systems
     # Wait for Grafana.
     #
     # An error log about `stat /proc` failing is expected.
-    timeout 10s bash -c "until curl --fail --output /dev/null --silent http://localhost:3000/api/health; do sleep 1; done"
+    timeout 30s bash -c "until curl --fail --output /dev/null --silent http://localhost:3000/api/health; do sleep 1; done"
     # Wait for Mimir.
     timeout 60s bash -c "until curl --fail --output /dev/null --silent http://localhost:8080/ready; do sleep 1; done"
     # Wait for Tempo.

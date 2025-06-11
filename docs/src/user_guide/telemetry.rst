@@ -34,7 +34,7 @@ Telemetry can be configured with the ``opentelemetry`` dictionary in the MSC con
          options:
            # ≤ 100 Hz collect frequency.
            collect_interval_millis: 10
-           collect_interval_timeout: 100
+           collect_timeout_millis: 100
            # ≤ 1 Hz export frequency.
            export_interval_millis: 1000
            export_timeout_millis: 500

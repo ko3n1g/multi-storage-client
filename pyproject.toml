@@ -115,12 +115,6 @@ directory = ".reports/unit/coverage"
 [tool.coverage.xml]
 output = ".reports/unit/coverage.xml"
 
-[tool.pip-licenses]
-format = "markdown"
-order = "license"
-output-file = ".licenses.md"
-with-urls = true
-
 [tool.poetry]
 packages = [
     { include = "multistorageclient", from = "src" }
