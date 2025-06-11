@@ -417,16 +417,10 @@ def test_posix_xattr_metadata(temp_data_store_type: type[tempdatastore.Temporary
         file_info = storage_provider._get_object_metadata(path=file_path)
         assert file_info is not None
 
-        # Check if xattrs are supported on this system
-        xattrs_supported = hasattr(os, "setxattr") and hasattr(os, "getxattr")
-        if xattrs_supported:
-            # Verify all metadata was stored correctly
-            assert file_info.metadata is not None
-            for key, value in test_metadata.items():
-                assert file_info.metadata[key] == value
-        else:
-            # If xattrs are not supported, metadata should be None
-            assert file_info.metadata is None
+        # Verify all metadata was stored correctly
+        assert file_info.metadata is not None
+        for key, value in test_metadata.items():
+            assert file_info.metadata[key] == value
 
         # Clean up
         storage_provider._delete_object(path=file_path)
