@@ -4,6 +4,9 @@
 # https://just.systems/man/en
 #
 
+# Compiler targets.
+compiler-targets := "aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-apple-darwin x86_64-unknown-linux-gnu"
+
 # Default to the first Python binary on `PATH`.
 python-binary := "python"
 
@@ -11,18 +14,20 @@ python-binary := "python"
 help:
     just --list
 
-# Prepare the virtual environment.
-prepare-virtual-environment:
+# Prepare the toolchain.
+prepare-toolchain:
+    # Add compiler targets.
+    rustup target add {{compiler-targets}}
     # Prepare the virtual environment.
     if [[ -z "${CI:-}" ]]; then uv sync --all-extras --python {{python-binary}}; else uv sync --all-extras --locked --python {{python-binary}}; fi
 
 # Start the Python REPL.
-start-repl: prepare-virtual-environment
+start-repl: prepare-toolchain
     # Start the Python REPL.
     uv run python
 
 # Run static analysis (format, lint, type check).
-analyze: prepare-virtual-environment
+analyze: prepare-toolchain
     # Remove analysis artifacts.
     rm -rf .reports/ruff.json
     # Format.
@@ -106,7 +111,7 @@ start-telemetry-systems: stop-telemetry-systems
     timeout 60s bash -c "until curl --fail --output /dev/null --silent http://localhost:8081/ready; do sleep 1; done"
 
 # Run unit tests.
-run-unit-tests: prepare-virtual-environment start-storage-systems && stop-storage-systems
+run-unit-tests: prepare-toolchain start-storage-systems && stop-storage-systems
     # Remove test artifacts.
     rm -rf .reports/unit
     # Unit test.
@@ -118,19 +123,40 @@ run-unit-tests: prepare-virtual-environment start-storage-systems && stop-storag
     uv run pytest --cov --cov-report term --cov-report html --cov-report xml --durations 0 --durations-min 10 --junit-xml .reports/unit/pytest.xml --numprocesses $NUMPROCESSES
 
 # Run load tests. For dummy load generation when experimenting with telemetry.
-run-load-tests: prepare-virtual-environment start-storage-systems && stop-storage-systems
+run-load-tests: prepare-toolchain start-storage-systems && stop-storage-systems
     # Load test.
     uv run pytest --minutes 30 tests/test_multistorageclient/load/local.py
 
 # Create package archives.
-package: prepare-virtual-environment
+package: prepare-toolchain
     # Remove package archives.
     rm -rf dist
-    # Create package archives.
-    uv build
+    # Create a source distribution.
+    uv build --sdist
+    # Create platform-specific wheels.
+    # Link Apple SDKs for cross-compilation, setup environment variables to correct wheel names.
+    # https://github.com/rust-cross/cargo-zigbuild#caveats
+    # https://github.com/PyO3/maturin/discussions/2586#discussioncomment-13095109
+    # https://github.com/PyO3/maturin/blob/d95faa64f2c9971820314d228da9a7e71d2e4b87/src/build_context.rs#L1160
+    for TARGET in {{compiler-targets}}; do \
+        if [ "$TARGET" = "aarch64-apple-darwin" ]; then \
+            MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_AARCH64; \
+            SDKROOT=$APPLE_SDK_AARCH64; \
+        elif [ "$TARGET" = "x86_64-apple-darwin" ]; then \
+            MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_X86_64; \
+            SDKROOT=$APPLE_SDK_X86_64; \
+        else \
+            MACOSX_DEPLOYMENT_TARGET=""; \
+            SDKROOT=""; \
+        fi; \
+        env --unset _PYTHON_HOST_PLATFORM \
+            MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
+            SDKROOT=$SDKROOT \
+            uv run maturin build --out dist --release --target $TARGET --zig; \
+    done
 
 # Build the documentation.
-document: prepare-virtual-environment
+document: prepare-toolchain
     # Remove documentation artifacts.
     rm -rf docs/dist
     # Build the documentation website.
@@ -140,7 +166,7 @@ document: prepare-virtual-environment
 build: analyze run-unit-tests package document
 
 # Run E2E tests.
-run-e2e-tests: prepare-virtual-environment
+run-e2e-tests: prepare-toolchain
     # Remove test artifacts.
     rm -rf .reports/e2e
     # E2E test.

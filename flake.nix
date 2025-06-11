@@ -77,6 +77,8 @@
             python311
             python312
             python313
+            # Rust.
+            rustup
             # uv.
             uv
             # Ruff.
@@ -99,26 +101,39 @@
             gh
           ];
 
-          shellHook = ''
-            # Dynamic linker.
-            #
-            # https://discourse.nixos.org/t/how-to-solve-libstdc-not-found-in-shell-nix/25458
-            # https://discourse.nixos.org/t/poetry-pandas-issue-libz-so-1-not-found/17167
-            export LD_LIBRARY_PATH=${
-              with inputs.nixpkgs.legacyPackages.${system};
-              lib.strings.makeLibraryPath [
-                stdenv.cc.cc.lib
-                zlib
-              ]
-            }
+          shellHook =
+            let
+              apple-sdk = {
+                aarch64 = inputs.nixpkgs.legacyPackages.aarch64-darwin.apple-sdk_11;
+                x86_64 = inputs.nixpkgs.legacyPackages.x86_64-darwin.apple-sdk_11;
+              };
+            in
+            ''
+              # Dynamic linker.
+              #
+              # https://discourse.nixos.org/t/how-to-solve-libstdc-not-found-in-shell-nix/25458
+              # https://discourse.nixos.org/t/poetry-pandas-issue-libz-so-1-not-found/17167
+              export LD_LIBRARY_PATH=${
+                with inputs.nixpkgs.legacyPackages.${system};
+                lib.strings.makeLibraryPath [
+                  stdenv.cc.cc.lib
+                  zlib
+                ]
+              }
 
-            # Disable Objective-C fork safety on macOS for pytest-xdist.
-            #
-            # https://github.com/python/cpython/issues/77906
-            export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+              # Apple SDKs.
+              export APPLE_SDK_AARCH64=${apple-sdk.aarch64}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+              export APPLE_SDK_X86_64=${apple-sdk.x86_64}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+              export APPLE_SDK_VERSION_AARCH64=${apple-sdk.aarch64.version}
+              export APPLE_SDK_VERSION_X86_64=${apple-sdk.x86_64.version}
 
-            echo "⚗️"
-          '';
+              # Disable Objective-C fork safety on macOS for pytest-xdist.
+              #
+              # https://github.com/python/cpython/issues/77906
+              export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+
+              echo "⚗️"
+            '';
         };
       });
     };

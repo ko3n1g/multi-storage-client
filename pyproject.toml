@@ -1,8 +1,8 @@
 [build-system]
 requires = [
-    "poetry-core~=2.0"
+    "maturin~=1.8"
 ]
-build-backend = "poetry.core.masonry.api"
+build-backend = "maturin"
 
 [project]
 name = "multi-storage-client"
@@ -14,6 +14,18 @@ authors = [
 license = "Apache-2.0"
 readme = "README.md"
 requires-python = "~=3.9"
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13"
+]
 dependencies = [
     "filelock~=3.14",
     "jmespath~=1.0.1",
@@ -81,6 +93,7 @@ dev = [
     "types-PyYAML~=6.0.1",
     "types-python-dateutil~=2.8",
     "types-requests~=2.25",
+    "maturin[zig]~=1.8",
     "pytest~=8.3.4",
     "pytest-asyncio~=0.25.3",
     "pytest-cov~=6.0.0",
@@ -115,6 +128,17 @@ directory = ".reports/unit/coverage"
 [tool.coverage.xml]
 output = ".reports/unit/coverage.xml"
 
+[tool.maturin]
+features = ["pyo3/extension-module"]
+manifest-path = "rust/Cargo.toml"
+python-packages = ["multistorageclient", "multistorageclient_rust"]
+
+[tool.pip-licenses]
+format = "markdown"
+order = "license"
+output-file = ".licenses.md"
+with-urls = true
+
 [tool.poetry]
 packages = [
     { include = "multistorageclient", from = "src" }
@@ -136,7 +160,8 @@ pythonpath = [
     "tests"
 ]
 testpaths = [
-    "tests/test_multistorageclient/unit"
+    "tests/test_multistorageclient/unit",
+    "tests/test_multistorageclient_rust/unit",
 ]
 
 [tool.ruff]

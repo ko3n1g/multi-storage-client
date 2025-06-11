@@ -33,9 +33,42 @@ variables:
     name: Production
     action: access
 
+Create Package:
+  extends:
+    - .default
+  script:
+    - |
+      nix develop --command bash -c "
+        just package
+      "
+  artifacts:
+    paths:
+      - dist/
+
 Publish Package:
   extends:
     - .default
+  needs:
+    - job: Create Package
+      artifacts: true
+  parallel:
+    matrix:
+      - WHEEL_ARCH: arm64
+        WHEEL_OS: macosx
+        ARTIFACTORY_ARCH: arm64
+        ARTIFACTORY_OS: macos
+      - WHEEL_ARCH: x86_64
+        WHEEL_OS: macosx
+        ARTIFACTORY_ARCH: x86_64
+        ARTIFACTORY_OS: macos
+      - WHEEL_ARCH: aarch64
+        WHEEL_OS: manylinux
+        ARTIFACTORY_ARCH: aarch64
+        ARTIFACTORY_OS: linux
+      - WHEEL_ARCH: x86_64
+        WHEEL_OS: manylinux
+        ARTIFACTORY_ARCH: x86_64
+        ARTIFACTORY_OS: linux
   variables:
     URM_ARTIFACTORY_URL: https://urm.nvidia.com/artifactory
     URM_ARTIFACTORY_PATH: sw-ngc-data-platform-pypi/multi-storage-client/${CI_COMMIT_TAG}/
@@ -47,6 +80,7 @@ Publish Package:
           --url ${URM_ARTIFACTORY_URL} \
           --user ${URM_ARTIFACTORY_USERNAME} \
           --password ${URM_ARTIFACTORY_PASSWORD} \
+          --props 'arch=${ARTIFACTORY_ARCH};os=${ARTIFACTORY_OS}' \
           --fail-no-op \
           ${URM_ARTIFACTORY_PATH} ||
         (
@@ -59,14 +93,11 @@ Publish Package:
             --fail-no-op \
             --flat \
             --quiet \
-            --target-props 'component_name=multi_storage_client;version=${CI_COMMIT_TAG};arch=any;os=any;changelist=${CI_COMMIT_SHORT_SHA};branch=release;release_approver=${GITLAB_USER_LOGIN};release_status=ready' \
-            dist/multi_storage_client-${CI_COMMIT_TAG}-*-none-any.whl \
+            --target-props 'component_name=multi_storage_client;version=${CI_COMMIT_TAG};arch=${ARTIFACTORY_ARCH};os=${ARTIFACTORY_OS};changelist=${CI_COMMIT_SHORT_SHA};branch=release;release_approver=${GITLAB_USER_LOGIN};release_status=ready' \
+            dist/multi_storage_client-${CI_COMMIT_TAG}-*-${WHEEL_OS}_*_${WHEEL_ARCH}.whl \
             ${URM_ARTIFACTORY_PATH}
         )
       "
-  artifacts:
-    paths:
-      - dist
 
 Publish GitHub:
   extends:

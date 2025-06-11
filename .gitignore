@@ -23,6 +23,9 @@
 .venv
 __pycache__
 dist
+rust/target
+*.o
+*.so
 
 # Storage systems.
 .azurite/sandbox

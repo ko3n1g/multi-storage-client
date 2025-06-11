@@ -1,0 +1,22 @@
+#
+# Cargo configuration.
+#
+# https://doc.rust-lang.org/cargo/reference/manifest.html
+#
+
+[package]
+name = "multistorageclient_rust"
+edition = "2021"
+
+[lib]
+name = "multistorageclient_rust"
+crate-type = ["cdylib"]
+publish = false
+
+[dependencies]
+pyo3 = { version = "0.24.2", features = ["abi3-py39"] }
+pyo3-async-runtimes = { version = "0.24", features = ["tokio-runtime"] }
+tokio = { version = "1.36.0", features = ["full", "macros"] }
+bytes = "1.10.1"
+object_store = { version = "0.12.0", features = ["aws"] }
+thiserror = "2.0.12"
