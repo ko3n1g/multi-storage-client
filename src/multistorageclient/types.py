@@ -169,16 +169,16 @@ class StorageProvider(ABC):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> None:
         """
         Uploads an object to the storage provider.
 
         :param path: The path where the object will be stored.
         :param body: The content of the object to store.
-        :param metadata: Metadata to associate with the object.
+        :param attributes: The attributes to add to the file
         """
         pass
 
@@ -246,13 +246,14 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def upload_file(self, remote_path: str, f: Union[str, IO]) -> None:
+    def upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> None:
         """
         Uploads a file from the local file system to the storage provider.
 
         :param remote_path: The path where the object will be stored.
         :param f: The source file to upload. This can either be a string representing the local
             file path, or a file-like object (e.g., an open file handle).
+        :param attributes: The attributes to add to the file if a new file is created.
         """
         pass
 

@@ -42,7 +42,7 @@ from ..types import (
     Range,
     RetryableError,
 )
-from ..utils import split_path
+from ..utils import split_path, validate_attributes
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")
@@ -205,9 +205,9 @@ class OracleStorageProvider(BaseStorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> int:
         bucket, key = split_path(path)
         self._refresh_oci_client_if_needed()
@@ -215,12 +215,13 @@ class OracleStorageProvider(BaseStorageProvider):
         # OCI only supports if_none_match=="*"
         # refer: https://docs.oracle.com/en-us/iaas/tools/python/2.150.0/api/object_storage/client/oci.object_storage.ObjectStorageClient.html?highlight=put_object#oci.object_storage.ObjectStorageClient.put_object
         def _invoke_api() -> int:
+            validated_attributes = validate_attributes(attributes)
             self._oci_client.put_object(
                 namespace_name=self._namespace,
                 bucket_name=bucket,
                 object_name=key,
                 put_object_body=body,
-                opc_meta=metadata or {},  # Pass metadata or empty dict
+                opc_meta=validated_attributes or {},  # Pass metadata or empty dict
                 if_match=if_match,
                 if_none_match=if_none_match,
             )
@@ -437,7 +438,7 @@ class OracleStorageProvider(BaseStorageProvider):
 
         return self._collect_metrics(_invoke_api, operation="LIST", bucket=bucket, key=prefix)
 
-    def _upload_file(self, remote_path: str, f: Union[str, IO]) -> int:
+    def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         bucket, key = split_path(remote_path)
         file_size: int = 0
         self._refresh_oci_client_if_needed()

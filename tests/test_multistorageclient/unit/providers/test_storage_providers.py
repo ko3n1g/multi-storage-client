@@ -308,7 +308,7 @@ def test_put_object_with_etag_metadata(temp_data_store_type: type[tempdatastore.
 
         # Write file with metadata containing etag
         metadata = {"etag": test_etag}
-        storage_provider._put_object(path=file_path, body=file_body, metadata=metadata)
+        storage_provider._put_object(path=file_path, body=file_body, attributes=metadata)
 
         # Verify file exists and content is correct
         assert storage_provider._get_object(path=file_path) == file_body
@@ -408,7 +408,7 @@ def test_posix_xattr_metadata(temp_data_store_type: type[tempdatastore.Temporary
         }
 
         # Write file with metadata
-        storage_provider._put_object(path=file_path, body=file_body, metadata=test_metadata)
+        storage_provider._put_object(path=file_path, body=file_body, attributes=test_metadata)
 
         # Verify file exists and content is correct
         assert storage_provider._get_object(path=file_path) == file_body

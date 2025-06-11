@@ -16,6 +16,7 @@
 from __future__ import annotations  # Enables forward references in type hints
 
 import io
+import json
 import logging
 import os
 import tempfile
@@ -24,6 +25,7 @@ from collections.abc import Iterator
 from io import BytesIO, StringIO
 from typing import IO, TYPE_CHECKING, Any, Optional
 
+import xattr
 from opentelemetry.trace import Span
 
 from .cache import CacheManager
@@ -35,6 +37,7 @@ from .instrumentation.utils import (
     file_tracer,
 )
 from .types import Range, SourceVersionCheckMode
+from .utils import validate_attributes
 
 if TYPE_CHECKING:
     from .client import StorageClient
@@ -185,6 +188,7 @@ class ObjectFile(IO):
 
     _local_path: Optional[str] = None
     _trace_span: Optional[Span] = None
+    _attributes: Optional[dict[str, str]] = None
 
     def __init__(
         self,
@@ -195,6 +199,7 @@ class ObjectFile(IO):
         disable_read_cache: bool = False,
         memory_load_limit: int = MEMORY_LOAD_LIMIT,
         check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
+        attributes: Optional[dict[str, str]] = None,
     ):
         """
         Initialize the ObjectFile instance.
@@ -206,6 +211,7 @@ class ObjectFile(IO):
         :param disable_read_cache: When set to True, disables caching for the file content. This parameter is only applicable when the mode is "r" or "rb".
         :param memory_load_limit: Size limit in bytes for loading files into memory. Defaults to 512MB. This parameter is only applicable when the mode is "r" or "rb".
         :param check_source_version: Whether to check the source version of cached objects.
+        :param attributes: The attributes to add to the file if a new file is created.
         """
         # Initialize parent trace span for this file to share the context with following R/W operations
         self._trace_span = TRACER.start_span("ObjectFile Lifecycle", attributes=DEFAULT_ATTRIBUTES)
@@ -254,6 +260,9 @@ class ObjectFile(IO):
             else:
                 # Write or append
                 self._create_fileobj()
+
+        if attributes:
+            self._attributes = attributes
 
     def _create_fileobj(self) -> None:
         """
@@ -499,7 +508,7 @@ class ObjectFile(IO):
         """
         if self._mode in ("w", "wb"):
             self._file.seek(0)
-            self._storage_client.upload_file(self._remote_path, self._file)
+            self._storage_client.upload_file(self._remote_path, self._file, attributes=self._attributes)
         elif self._mode in ("a", "ab"):
             # The append mode downloads the file first (if applicable), then upload it again with the appended content.
             temp_file_path = self._get_temp_file_path()
@@ -522,7 +531,7 @@ class ObjectFile(IO):
                 self._file.seek(0)
                 fp.write(self._file.read())
 
-            self._storage_client.upload_file(self._remote_path, temp_file_path)
+            self._storage_client.upload_file(self._remote_path, temp_file_path, attributes=self._attributes)
             os.unlink(temp_file_path)
 
     def resolve_filesystem_path(self) -> Optional[str]:
@@ -572,6 +581,7 @@ class PosixFile(IO):
     _storage_client: StorageClient
     _file: IO
     _trace_span: Optional[Span] = None
+    _attributes: Optional[dict[str, str]] = None
 
     def __init__(
         self,
@@ -581,6 +591,7 @@ class PosixFile(IO):
         buffering: int = -1,
         encoding: Optional[str] = None,
         atomic: bool = True,
+        attributes: Optional[dict[str, str]] = None,
     ):
         # Initialize parent trace span for this file to share the context with following R/W operations
         self._trace_span = TRACER.start_span("PosixFile Lifecycle", attributes=DEFAULT_ATTRIBUTES)
@@ -614,6 +625,8 @@ class PosixFile(IO):
             self._file = open(self._temp_path, mode=mode, buffering=buffering, encoding=encoding)
         else:
             self._file = open(self._real_path, mode=mode, buffering=buffering, encoding=encoding)
+
+        self._attributes = attributes
 
     @property
     def name(self) -> str:
@@ -714,6 +727,14 @@ class PosixFile(IO):
         if self._atomic and "w" in self._mode:
             # Rename the temporary file to the target file
             os.rename(self._temp_path, self._real_path)
+
+        if self._attributes and ("w" in self._mode or "a" in self._mode):
+            validated_attributes = validate_attributes(self._attributes)
+            if validated_attributes:
+                try:
+                    xattr.setxattr(self._real_path, "user.json", json.dumps(validated_attributes).encode("utf-8"))
+                except OSError as e:
+                    logger.warning("Failed to set extended attributes on %s: %s", self._real_path, e)
 
     def resolve_filesystem_path(self) -> Optional[str]:
         return self._file.name

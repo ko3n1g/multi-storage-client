@@ -25,6 +25,7 @@ from .shortcuts import (
     download_file,
     get_telemetry,
     glob,
+    info,
     is_empty,
     is_file,
     list,
@@ -59,6 +60,7 @@ __all__ = [
     "list",
     "write",
     "delete",
+    "info",
 ]
 
 

@@ -181,12 +181,13 @@ class StorageClient:
             self._storage_provider.download_file(remote_path, local_path)
 
     @retry
-    def upload_file(self, remote_path: str, local_path: str) -> None:
+    def upload_file(self, remote_path: str, local_path: str, attributes: Optional[dict[str, str]] = None) -> None:
         """
         Uploads a file from the local file system to the storage provider.
 
         :param remote_path: The path where the file should be stored in the storage provider.
         :param local_path: The local path of the file to upload.
+        :param attributes: The attributes to add to the file.
         """
         virtual_path = remote_path
         if self._metadata_provider:
@@ -196,18 +197,19 @@ class StorageClient:
                     f"The file at path '{virtual_path}' already exists; "
                     f"overwriting is not yet allowed when using a metadata provider."
                 )
-        self._storage_provider.upload_file(remote_path, local_path)
+        self._storage_provider.upload_file(remote_path, local_path, attributes)
         if self._metadata_provider:
             metadata = self._storage_provider.get_object_metadata(remote_path)
             self._metadata_provider.add_file(virtual_path, metadata)
 
     @retry
-    def write(self, path: str, body: bytes) -> None:
+    def write(self, path: str, body: bytes, attributes: Optional[dict[str, str]] = None) -> None:
         """
         Writes an object to the storage provider at the specified path.
 
         :param path: The path where the object should be written.
         :param body: The content to write to the object.
+        :param attributes: The attributes to add to the file.
         """
         virtual_path = path
         if self._metadata_provider:
@@ -217,7 +219,7 @@ class StorageClient:
                     f"The file at path '{virtual_path}' already exists; "
                     f"overwriting is not yet allowed when using a metadata provider."
                 )
-        self._storage_provider.put_object(path, body)
+        self._storage_provider.put_object(path, body, attributes=attributes)
         if self._metadata_provider:
             # TODO(NGCDP-3016): Handle eventual consistency of Swiftstack, without wait.
             metadata = self._storage_provider.get_object_metadata(path)
@@ -284,7 +286,11 @@ class StorageClient:
 
         self._storage_provider.delete_object(path)
 
-    def glob(self, pattern: str, include_url_prefix: bool = False) -> list[str]:
+    def glob(
+        self,
+        pattern: str,
+        include_url_prefix: bool = False,
+    ) -> list[str]:
         """
         Matches and retrieves a list of objects in the storage provider that
         match the specified pattern.
@@ -343,6 +349,7 @@ class StorageClient:
         memory_load_limit: int = MEMORY_LOAD_LIMIT,
         atomic: bool = True,
         check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
+        attributes: Optional[dict[str, str]] = None,
     ) -> Union[PosixFile, ObjectFile]:
         """
         Returns a file-like object from the storage provider at the specified path.
@@ -358,10 +365,13 @@ class StorageClient:
         :param atomic: When set to True, the file will be written atomically (rename upon close).
             This parameter is only applicable to PosixFile in write mode.
         :param check_source_version: Whether to check the source version of cached objects.
+        :param attributes: The attributes to add to the file.  This parameter is only applicable when the mode is "w" or "wb" or "a" or "ab".
         :return: A file-like object (PosixFile or ObjectFile) for the specified path.
         """
         if self._is_posix_file_storage_provider():
-            return PosixFile(self, path=path, mode=mode, buffering=buffering, encoding=encoding, atomic=atomic)
+            return PosixFile(
+                self, path=path, mode=mode, buffering=buffering, encoding=encoding, atomic=atomic, attributes=attributes
+            )
         else:
             if atomic is False:
                 logger.warning("Non-atomic writes are not supported for object storage providers.")
@@ -374,6 +384,7 @@ class StorageClient:
                 disable_read_cache=disable_read_cache,
                 memory_load_limit=memory_load_limit,
                 check_source_version=check_source_version,
+                attributes=attributes,
             )
 
     def is_file(self, path: str) -> bool:

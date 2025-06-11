@@ -219,6 +219,110 @@ def verify_storage_provider(storage_client: msc.StorageClient, prefix: str) -> N
     wait(waitable=lambda: storage_client.list(prefix), should_wait=len_should_wait(expected_len=1))
 
 
+def verify_attributes(storage_client: msc.StorageClient, prefix: str) -> None:
+    """Test attributes functionality - storing custom metadata with msc_ prefix."""
+    test_file_path = f"{prefix}/test_file.txt"
+    test_content = b"test content for attributes"
+
+    # Test attributes with various data types and edge cases
+    test_attributes = {
+        "model_name": "test-model-123",
+        "model_version": "v1.2.3",
+        "checkpoint_epoch": "100",
+        "dataset": "imagenet_2023",
+        "user": "researcher_001",
+    }
+
+    # Test 1: Write file with attributes using client.write()
+    storage_client.write(test_file_path, test_content, attributes=test_attributes)
+
+    # Verify file exists and has correct content
+    with storage_client.open(test_file_path, "rb") as fp:
+        content = fp.read()
+        assert content == test_content
+
+    # Get object metadata and verify attributes are stored correctly
+    metadata = storage_client.info(test_file_path)
+    assert metadata is not None
+    assert metadata.metadata is not None
+
+    # Verify all attributes are present with msc_ prefix
+    for key, value in test_attributes.items():
+        assert key in metadata.metadata, f"Expected attribute '{key}' not found in metadata"
+        assert metadata.metadata[key] == value, f"Attribute '{key}' has incorrect value"
+
+    # Test 2: Upload file with attributes using client.upload_file()
+    upload_file_path = f"{prefix}/uploaded_file.txt"
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_file.write(test_content)
+        temp_file.flush()
+
+        storage_client.upload_file(upload_file_path, temp_file.name, attributes=test_attributes)
+
+        # Verify uploaded file has attributes
+        upload_metadata = storage_client.info(upload_file_path)
+        assert upload_metadata is not None
+        assert upload_metadata.metadata is not None
+
+        for key, value in test_attributes.items():
+            assert key in upload_metadata.metadata
+            assert upload_metadata.metadata[key] == value
+
+    os.unlink(temp_file.name)
+
+    # Test 3: Test with file open context manager
+    context_file_path = f"{prefix}/context_file.txt"
+    with storage_client.open(context_file_path, "wb", attributes=test_attributes) as f:
+        f.write(test_content)
+
+    # Verify context manager file has attributes
+    context_metadata = storage_client.info(context_file_path)
+    assert context_metadata is not None
+    assert context_metadata.metadata is not None
+
+    for key, value in test_attributes.items():
+        assert key in context_metadata.metadata
+        assert context_metadata.metadata[key] == value
+
+    # Test 4: Test attribute validation limits
+    # Test key length limit (32 characters max)
+    long_key_attributes = {"a" * 33: "value"}  # 33 chars, should fail
+    long_key_file_path = f"{prefix}/long_key_file.txt"
+
+    with pytest.raises(RuntimeError, match="Failed to PUT object.*exceeds maximum length of 32 characters"):
+        storage_client.write(long_key_file_path, test_content, attributes=long_key_attributes)
+
+    # Test value length limit (128 characters max)
+    long_value_attributes = {"key": "x" * 129}  # 129 chars, should fail
+    long_value_file_path = f"{prefix}/long_value_file.txt"
+
+    with pytest.raises(RuntimeError, match="Failed to PUT object.*exceeds maximum length of 128 characters"):
+        storage_client.write(long_value_file_path, test_content, attributes=long_value_attributes)
+
+    # Test 5: Test edge cases
+    # Empty attributes dict should work (None gets passed through)
+    empty_attrs_file_path = f"{prefix}/empty_attrs_file.txt"
+    storage_client.write(empty_attrs_file_path, test_content, attributes={})
+
+    # Test with None attributes should work
+    none_attrs_file_path = f"{prefix}/none_attrs_file.txt"
+    storage_client.write(none_attrs_file_path, test_content, attributes=None)
+
+    # Test 6: Test maximum valid key and value lengths
+    max_valid_attributes = {
+        "k" * 32: "v" * 128,  # Max valid lengths
+        "short": "val",
+    }
+    max_valid_file_path = f"{prefix}/max_valid_file.txt"
+    storage_client.write(max_valid_file_path, test_content, attributes=max_valid_attributes)
+
+    max_valid_metadata = storage_client.info(max_valid_file_path)
+    assert max_valid_metadata is not None
+    assert max_valid_metadata.metadata is not None
+    assert f"{'k' * 32}" in max_valid_metadata.metadata
+    assert "short" in max_valid_metadata.metadata
+
+
 def test_shortcuts(profile: str):
     client, _ = msc.resolve_storage_client(f"msc://{profile}/")
     prefix = f"files-{uuid.uuid4()}"
@@ -233,6 +337,16 @@ def test_storage_client(profile: str):
     prefix = f"files-{uuid.uuid4()}"
     try:
         verify_storage_provider(client, prefix)
+    finally:
+        delete_files(client, prefix)
+
+
+def test_attributes(profile: str):
+    """Test attributes functionality - storing custom metadata with msc_ prefix."""
+    client, _ = msc.resolve_storage_client(f"msc://{profile}/")
+    prefix = f"attributes-{uuid.uuid4()}"
+    try:
+        verify_attributes(client, prefix)
     finally:
         delete_files(client, prefix)
 

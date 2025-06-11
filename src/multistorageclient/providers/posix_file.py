@@ -26,10 +26,12 @@ from io import BytesIO, StringIO
 from typing import IO, Any, Optional, TypeVar, Union
 
 import opentelemetry.metrics as api_metrics
+import xattr
 
 from ..telemetry import Telemetry
 from ..telemetry.attributes.base import AttributesProvider
 from ..types import AWARE_DATETIME_MIN, ObjectMetadata, Range
+from ..utils import validate_attributes
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")
@@ -39,7 +41,7 @@ PROVIDER = "file"
 logger = logging.getLogger(__name__)
 
 
-def atomic_write(source: Union[str, IO], destination: str):
+def atomic_write(source: Union[str, IO], destination: str, attributes: Optional[dict[str, str]] = None):
     """
     Writes the contents of a file to the specified destination path.
 
@@ -48,7 +50,9 @@ def atomic_write(source: Union[str, IO], destination: str):
 
     :param source: The input file to read from. It can be a string representing the path to a file, or an open file-like object (IO).
     :param destination: The path to the destination file where the contents should be written.
+    :param attributes: The attributes to set on the file.
     """
+
     with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=os.path.dirname(destination), prefix=".") as fp:
         temp_file_path = fp.name
         if isinstance(source, str):
@@ -56,6 +60,15 @@ def atomic_write(source: Union[str, IO], destination: str):
                 fp.write(src.read())
         else:
             fp.write(source.read())
+
+        # Set attributes on temp file if provided
+        validated_attributes = validate_attributes(attributes)
+        if validated_attributes:
+            try:
+                xattr.setxattr(temp_file_path, "user.json", json.dumps(validated_attributes).encode("utf-8"))
+            except OSError as e:
+                logger.debug(f"Failed to set extended attributes on temp file {temp_file_path}: {e}")
+
     os.rename(src=temp_file_path, dst=destination)
 
 
@@ -150,20 +163,13 @@ class PosixFileStorageProvider(BaseStorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> int:
         def _invoke_api() -> int:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            atomic_write(source=BytesIO(body), destination=path)
-
-            # Set metadata attributes if setxattr is available
-            if metadata and hasattr(os, "setxattr"):
-                json_str = json.dumps(metadata)
-                json_bytes = json_str.encode("utf-8")
-                os.setxattr(path, "user.json", json_bytes, flags=0)  # type: ignore
-
+            atomic_write(source=BytesIO(body), destination=path, attributes=attributes)
             return len(body)
 
         return self._collect_metrics(_invoke_api, operation="PUT", path=path, put_object_size=len(body))
@@ -185,7 +191,7 @@ class PosixFileStorageProvider(BaseStorageProvider):
 
         def _invoke_api() -> int:
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            atomic_write(source=src_path, destination=dest_path)
+            atomic_write(source=src_path, destination=dest_path, attributes=src_object.metadata)
 
             return src_object.content_length
 
@@ -211,12 +217,13 @@ class PosixFileStorageProvider(BaseStorageProvider):
         def _invoke_api() -> ObjectMetadata:
             # Get basic file attributes
             metadata_dict = {}
-            if hasattr(os, "getxattr"):
-                try:
-                    json_bytes = os.getxattr(path, "user.json")  # type: ignore
-                    metadata_dict = json.loads(json_bytes.decode("utf-8"))
-                except OSError:
-                    pass
+            try:
+                json_bytes = xattr.getxattr(path, "user.json")
+                metadata_dict = json.loads(json_bytes.decode("utf-8"))
+            except (OSError, IOError, KeyError, json.JSONDecodeError, AttributeError) as e:
+                # Silently ignore if xattr doesn't exist, can't be read, or is corrupted
+                logger.debug(f"Failed to read extended attributes from {path}: {e}")
+                pass
 
             return ObjectMetadata(
                 key=path,
@@ -298,7 +305,7 @@ class PosixFileStorageProvider(BaseStorageProvider):
 
         return self._collect_metrics(_invoke_api, operation="LIST", path=prefix)
 
-    def _upload_file(self, remote_path: str, f: Union[str, IO]) -> int:
+    def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         os.makedirs(os.path.dirname(remote_path), exist_ok=True)
 
         filesize: int = 0
@@ -310,7 +317,7 @@ class PosixFileStorageProvider(BaseStorageProvider):
             filesize = len(f.getvalue())  # type: ignore
 
         def _invoke_api() -> int:
-            atomic_write(source=f, destination=remote_path)
+            atomic_write(source=f, destination=remote_path, attributes=attributes)
 
             return filesize
 

@@ -54,3 +54,10 @@ def test_s3_conditional_put(profile_name):
 def test_s3_open_with_source_version_check(profile_name):
     profile = profile_name
     common.test_open_with_source_version_check(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-s3-iad"])
+def test_s3_attributes(profile_name):
+    """Test S3 attributes functionality - storing custom metadata with msc_ prefix."""
+    profile = profile_name
+    common.test_attributes(profile)

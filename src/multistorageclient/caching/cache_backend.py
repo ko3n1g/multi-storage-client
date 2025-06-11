@@ -661,7 +661,10 @@ class StorageProviderBackend(CacheBackend):
 
             # Store the object in S3 Express with etag metadata
             metadata = {"etag": etag} if etag else None
-            self._storage_provider.put_object(path=cache_path, body=data, metadata=metadata)  # type: ignore
+            # this metadata is used by cache backend to trace the etag of the source file
+            # it is not the same metadata for the object in the actual bucket
+            # for the actual file metadata, a separate call will needed to be made to the actual bucket
+            self._storage_provider.put_object(path=cache_path, body=data, attributes=metadata)  # type: ignore
 
             self._last_refresh_time = datetime.now()
 

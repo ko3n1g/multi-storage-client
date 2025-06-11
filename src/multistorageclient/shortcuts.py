@@ -234,7 +234,7 @@ def glob(pattern: str) -> list[str]:
         return client.glob(path, include_url_prefix=True)
 
 
-def upload_file(url: str, local_path: str) -> None:
+def upload_file(url: str, local_path: str, attributes: Optional[dict[str, str]] = None) -> None:
     """
     Upload a file to the given URL from a local path.
 
@@ -248,7 +248,7 @@ def upload_file(url: str, local_path: str) -> None:
     :raises ValueError: If the URL's protocol does not match the expected protocol ``msc``.
     """
     client, path = resolve_storage_client(url)
-    return client.upload_file(remote_path=path, local_path=local_path)
+    return client.upload_file(remote_path=path, local_path=local_path, attributes=attributes)
 
 
 def download_file(url: str, local_path: str) -> None:
@@ -309,7 +309,10 @@ def sync(source_url: str, target_url: str, delete_unmatched_files: bool = False)
 
 
 def list(
-    url: str, start_after: Optional[str] = None, end_at: Optional[str] = None, include_directories: bool = False
+    url: str,
+    start_after: Optional[str] = None,
+    end_at: Optional[str] = None,
+    include_directories: bool = False,
 ) -> Iterator[ObjectMetadata]:
     """
     Lists the contents of the specified URL prefix.
@@ -335,7 +338,7 @@ def list(
     )
 
 
-def write(url: str, body: bytes) -> None:
+def write(url: str, body: bytes, attributes: Optional[dict[str, str]] = None) -> None:
     """
     Writes an object to the storage provider at the specified path.
 
@@ -343,7 +346,7 @@ def write(url: str, body: bytes) -> None:
     :param body: The content to write to the object.
     """
     client, path = resolve_storage_client(url)
-    client.write(path=path, body=body)
+    client.write(path=path, body=body, attributes=attributes)
 
 
 def delete(url: str, recursive: bool = False) -> None:
@@ -358,6 +361,18 @@ def delete(url: str, recursive: bool = False) -> None:
     """
     client, path = resolve_storage_client(url)
     client.delete(path, recursive=recursive)
+
+
+def info(url: str) -> ObjectMetadata:
+    """
+    Retrieves metadata or information about an object stored at the specified path.
+
+    :param url: The URL of the object to retrieve information about. (example: ``msc://profile/prefix/file.txt``)
+
+    :return: An :py:class:`ObjectMetadata` object representing the object's metadata.
+    """
+    client, path = resolve_storage_client(url)
+    return client.info(path)
 
 
 def commit_metadata(url: str) -> None:

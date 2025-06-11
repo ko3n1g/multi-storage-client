@@ -52,6 +52,13 @@ def test_gcs_conditional_put(profile_name):
     )
 
 
+@pytest.mark.parametrize("profile_name", ["test-gcs"])
+def test_gcs_attributes(profile_name):
+    """Test gcs attributes functionality - storing custom metadata with msc_ prefix."""
+    profile = profile_name
+    common.test_attributes(profile)
+
+
 @pytest.mark.parametrize("profile_name", ["test-gcs-hmac"])
 @pytest.mark.parametrize("config_suffix", [""])
 def test_gcs_hmac_shortcuts(profile_name, config_suffix):

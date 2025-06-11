@@ -30,7 +30,7 @@ from multistorageclient.file import ObjectFile
 from multistorageclient.providers.manifest_metadata import (
     DEFAULT_MANIFEST_BASE_DIR,
 )
-from multistorageclient.types import MSC_PROTOCOL, SourceVersionCheckMode
+from multistorageclient.types import MSC_PROTOCOL, ObjectMetadata, SourceVersionCheckMode
 from test_multistorageclient.unit.utils import config, tempdatastore
 
 MB = 1024 * 1024
@@ -230,6 +230,10 @@ def verify_shortcuts(profile: str, prefix: str):
 
     for file_url in file_list:
         assert msc.is_file(file_url)
+
+    # info
+    obj_metadata = msc.info(f"msc://{profile}/{prefix}/folder/data-11.bin")
+    assert isinstance(obj_metadata, ObjectMetadata)
 
     # download
     filepath = os.path.join(tempfile.gettempdir(), "data-11.bin")
@@ -652,3 +656,235 @@ def test_open_with_cache_config(temp_data_store_type: Type[tempdatastore.Tempora
                 msc.delete(f"{MSC_PROTOCOL}test/{filepath}")
             except Exception:
                 pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_msc_write_with_attributes(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test msc.write with attributes functionality."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for msc.write attributes"
+        test_uuid = str(uuid.uuid4())
+        file_path = f"test-write-attributes-{test_uuid}.txt"
+
+        # Test attributes for msc.write
+        test_attributes = {
+            "upload_method": "msc.write",
+            "version": "1.0",
+            "author": "test_user",
+        }
+
+        try:
+            # Test msc.write with attributes
+            msc.write(f"{MSC_PROTOCOL}test/{file_path}", test_content, attributes=test_attributes)
+
+            # Verify content was written correctly
+            with msc.open(f"{MSC_PROTOCOL}test/{file_path}", "rb") as fp:
+                content = fp.read()
+                assert content == test_content
+
+            # Get the storage client to check metadata
+            metadata = msc.info(f"{MSC_PROTOCOL}test/{file_path}")
+
+            # For storage providers that support metadata, verify attributes are present
+            if hasattr(temp_data_store, "_bucket_name"):  # S3-like storage
+                assert metadata is not None
+                assert metadata.metadata is not None
+
+                # Verify all attributes are present with msc_ prefix
+                for key, value in test_attributes.items():
+                    assert key in metadata.metadata, f"Expected attribute '{key}' not found"
+                    assert metadata.metadata[key] == value, f"Attribute '{key}' has incorrect value"
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{file_path}")
+            except Exception:
+                pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_msc_upload_file_with_attributes(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test msc.upload_file with attributes functionality."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for msc.upload_file attributes"
+        test_uuid = str(uuid.uuid4())
+        file_path = f"test-upload-attributes-{test_uuid}.txt"
+
+        # Test attributes for msc.upload_file
+        test_attributes = {
+            "upload_method": "msc.upload_file",
+            "test_id": test_uuid,
+            "file_type": "test_data",
+        }
+
+        # Create a temporary local file
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            temp_file.write(test_content)
+            temp_file.flush()
+
+            # Test msc.upload_file with attributes
+            msc.upload_file(f"{MSC_PROTOCOL}test/{file_path}", temp_file.name, attributes=test_attributes)
+
+            # Verify content was uploaded correctly
+            with msc.open(f"{MSC_PROTOCOL}test/{file_path}", "rb") as fp:
+                content = fp.read()
+                assert content == test_content
+
+            # Get the storage client to check metadata
+            metadata = msc.info(f"{MSC_PROTOCOL}test/{file_path}")
+
+            # For storage providers that support metadata, verify attributes are present
+            if hasattr(temp_data_store, "_bucket_name"):  # S3-like storage
+                assert metadata is not None
+                assert metadata.metadata is not None
+
+                # Verify all attributes are present with msc_ prefix
+                for key, value in test_attributes.items():
+                    assert key in metadata.metadata, f"Expected attribute '{key}' not found"
+                    assert metadata.metadata[key] == value, f"Attribute '{key}' has incorrect value"
+
+        finally:
+            # Clean up
+            os.unlink(temp_file.name)
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{file_path}")
+            except Exception:
+                pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_msc_open_with_attributes(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test msc.open with attributes functionality."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for msc.open attributes"
+        test_uuid = str(uuid.uuid4())
+        file_path = f"test-open-attributes-{test_uuid}.txt"
+
+        # Test attributes for msc.open
+        test_attributes = {
+            "open_method": "msc.open",
+            "mode": "wb",
+            "test_case": "context_manager",
+        }
+
+        try:
+            # Test msc.open with attributes using context manager
+            with msc.open(f"{MSC_PROTOCOL}test/{file_path}", "wb", attributes=test_attributes) as f:
+                f.write(test_content)
+
+            # Verify content was written correctly
+            with msc.open(f"{MSC_PROTOCOL}test/{file_path}", "rb") as fp:
+                content = fp.read()
+                assert content == test_content
+
+            # Get the storage client to check metadata
+            metadata = msc.info(f"{MSC_PROTOCOL}test/{file_path}")
+
+            # For storage providers that support metadata, verify attributes are present
+            if hasattr(temp_data_store, "_bucket_name"):  # S3-like storage
+                assert metadata is not None
+                assert metadata.metadata is not None
+
+                # Verify all attributes are present with msc_ prefix
+                for key, value in test_attributes.items():
+                    assert key in metadata.metadata, f"Expected attribute '{key}' not found"
+                    assert metadata.metadata[key] == value, f"Attribute '{key}' has incorrect value"
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{file_path}")
+            except Exception:
+                pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_shortcuts_attributes_validation(temp_data_store_type: type[tempdatastore.TemporaryDataStore]) -> None:
+    """Test attributes validation in shortcut functions."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for validation"
+        test_uuid = str(uuid.uuid4())
+
+        # Test key length validation (max 32 characters)
+        long_key_attributes = {"a" * 33: "value"}  # 33 chars, should fail
+
+        with pytest.raises(RuntimeError, match="Failed to PUT object.*exceeds maximum length of 32 characters"):
+            msc.write(f"{MSC_PROTOCOL}test/test-long-key-{test_uuid}.txt", test_content, attributes=long_key_attributes)
+
+        # Test value length validation (max 128 characters)
+        long_value_attributes = {"key": "x" * 129}  # 129 chars, should fail
+
+        with pytest.raises(RuntimeError, match="Failed to PUT object.*exceeds maximum length of 128 characters"):
+            msc.write(
+                f"{MSC_PROTOCOL}test/test-long-value-{test_uuid}.txt", test_content, attributes=long_value_attributes
+            )

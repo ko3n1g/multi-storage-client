@@ -182,14 +182,14 @@ class BaseStorageProvider(StorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> None:
         path = self._prepend_base_path(path)
         self._emit_metrics(
             operation=BaseStorageProvider._Operation.WRITE,
-            f=lambda: self._put_object(path, body, metadata, if_match, if_none_match),
+            f=lambda: self._put_object(path, body, if_match, if_none_match, attributes),
         )
 
     def get_object(self, path: str, byte_range: Optional[Range] = None) -> bytes:
@@ -255,11 +255,11 @@ class BaseStorageProvider(StorageProvider):
         else:
             yield from objects
 
-    def upload_file(self, remote_path: str, f: Union[str, IO]) -> None:
+    def upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> None:
         remote_path = self._prepend_base_path(remote_path)
         self._emit_metrics(
             operation=BaseStorageProvider._Operation.WRITE,
-            f=lambda: self._upload_file(remote_path, f),
+            f=lambda: self._upload_file(remote_path, f, attributes),
         )
 
     def download_file(self, remote_path: str, f: Union[str, IO], metadata: Optional[ObjectMetadata] = None) -> None:
@@ -287,9 +287,9 @@ class BaseStorageProvider(StorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> int:
         """
         :return: Data size in bytes.
@@ -335,7 +335,7 @@ class BaseStorageProvider(StorageProvider):
         pass
 
     @abstractmethod
-    def _upload_file(self, remote_path: str, f: Union[str, IO]) -> int:
+    def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         """
         :return: Data size in bytes.
         """

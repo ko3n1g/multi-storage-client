@@ -35,7 +35,7 @@ from ..types import (
     PreconditionFailedError,
     Range,
 )
-from ..utils import split_path
+from ..utils import split_path, validate_attributes
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")
@@ -225,18 +225,18 @@ class AzureBlobStorageProvider(BaseStorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> int:
         """
         Uploads an object to Azure Blob Storage.
 
         :param path: The path to the object to upload.
         :param body: The content of the object to upload.
-        :param metadata: Optional metadata to associate with the object.
         :param if_match: Optional ETag to match against the object.
         :param if_none_match: Optional ETag to match against the object.
+        :param attributes: Optional attributes to attach to the object.
         """
         container_name, blob_name = split_path(path)
         self._refresh_blob_service_client_if_needed()
@@ -249,8 +249,9 @@ class AzureBlobStorageProvider(BaseStorageProvider):
                 "overwrite": True,
             }
 
-            if metadata:
-                kwargs["metadata"] = metadata
+            validated_attributes = validate_attributes(attributes)
+            if validated_attributes:
+                kwargs["metadata"] = validated_attributes
 
             if if_match:
                 kwargs["match_condition"] = MatchConditions.IfNotModified
@@ -432,7 +433,7 @@ class AzureBlobStorageProvider(BaseStorageProvider):
 
         return self._collect_metrics(_invoke_api, operation="LIST", container=container_name, blob=prefix)
 
-    def _upload_file(self, remote_path: str, f: Union[str, IO]) -> int:
+    def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         container_name, blob_name = split_path(remote_path)
         file_size: int = 0
         self._refresh_blob_service_client_if_needed()

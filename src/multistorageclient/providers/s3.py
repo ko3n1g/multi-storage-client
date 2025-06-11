@@ -40,7 +40,7 @@ from ..types import (
     Range,
     RetryableError,
 )
-from ..utils import split_path
+from ..utils import split_path, validate_attributes
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")
@@ -383,31 +383,32 @@ class S3StorageProvider(BaseStorageProvider):
         self,
         path: str,
         body: bytes,
-        metadata: Optional[dict[str, str]] = None,
         if_match: Optional[str] = None,
         if_none_match: Optional[str] = None,
+        attributes: Optional[dict[str, str]] = None,
     ) -> int:
         """
         Uploads an object to the specified S3 path.
 
         :param path: The S3 path where the object will be uploaded.
         :param body: The content of the object as bytes.
-        :param metadata: Optional metadata to attach to the object.
         :param if_match: Optional If-Match header value. Use "*" to only upload if the object doesn't exist.
         :param if_none_match: Optional If-None-Match header value. Use "*" to only upload if the object doesn't exist.
+        :param attributes: Optional attributes to attach to the object.
         """
         bucket, key = split_path(path)
 
         def _invoke_api() -> int:
             kwargs = {"Bucket": bucket, "Key": key, "Body": body}
-            if metadata:
-                kwargs["Metadata"] = metadata
             if self._is_directory_bucket(bucket):
                 kwargs["StorageClass"] = EXPRESS_ONEZONE_STORAGE_CLASS
             if if_match:
                 kwargs["IfMatch"] = if_match
             if if_none_match:
                 kwargs["IfNoneMatch"] = if_none_match
+            validated_attributes = validate_attributes(attributes)
+            if validated_attributes:
+                kwargs["Metadata"] = validated_attributes
 
             # Capture the response from put_object
             response = self._s3_client.put_object(**kwargs)
@@ -599,7 +600,7 @@ class S3StorageProvider(BaseStorageProvider):
 
         return self._collect_metrics(_invoke_api, operation="LIST", bucket=bucket, key=prefix)
 
-    def _upload_file(self, remote_path: str, f: Union[str, IO]) -> int:
+    def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         file_size: int = 0
 
         if isinstance(f, str):
@@ -608,7 +609,7 @@ class S3StorageProvider(BaseStorageProvider):
             # Upload small files
             if file_size <= self._transfer_config.multipart_threshold:
                 with open(f, "rb") as fp:
-                    self._put_object(remote_path, fp.read())
+                    self._put_object(remote_path, fp.read(), attributes=attributes)
                 return file_size
 
             # Upload large files using TransferConfig
@@ -618,6 +619,9 @@ class S3StorageProvider(BaseStorageProvider):
                 extra_args = {}
                 if self._is_directory_bucket(bucket):
                     extra_args["StorageClass"] = EXPRESS_ONEZONE_STORAGE_CLASS
+                validated_attributes = validate_attributes(attributes)
+                if validated_attributes:
+                    extra_args["Metadata"] = validated_attributes
                 response = self._s3_client.upload_file(
                     Filename=f,
                     Bucket=bucket,
@@ -642,9 +646,9 @@ class S3StorageProvider(BaseStorageProvider):
 
             if file_size <= self._transfer_config.multipart_threshold:
                 if isinstance(f, io.StringIO):
-                    self._put_object(remote_path, f.read().encode("utf-8"))
+                    self._put_object(remote_path, f.read().encode("utf-8"), attributes=attributes)
                 else:
-                    self._put_object(remote_path, f.read())
+                    self._put_object(remote_path, f.read(), attributes=attributes)
                 return file_size
 
             # Upload large files using TransferConfig
@@ -654,6 +658,9 @@ class S3StorageProvider(BaseStorageProvider):
                 extra_args = {}
                 if self._is_directory_bucket(bucket):
                     extra_args["StorageClass"] = EXPRESS_ONEZONE_STORAGE_CLASS
+                validated_attributes = validate_attributes(attributes)
+                if validated_attributes:
+                    extra_args["Metadata"] = validated_attributes
                 self._s3_client.upload_fileobj(
                     Fileobj=f,
                     Bucket=bucket,
