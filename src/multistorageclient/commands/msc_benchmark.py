@@ -23,6 +23,7 @@ from multiprocessing import Manager, Pool
 from multiprocessing.managers import ListProxy
 from typing import Any, Optional, Union
 
+import multistorageclient.telemetry as telemetry
 from multistorageclient import StorageClient, StorageClientConfig
 from multistorageclient.schema import BENCHMARK_SCHEMA, validate
 
@@ -264,8 +265,8 @@ def main() -> None:
     test_object_sizes = config["test_object_sizes"]
 
     # Initialize storage client
-    storage_client_config = StorageClientConfig.from_file(profile=args.profile)
-    storage_client = StorageClient(storage_client_config)
+    storage_client_config = StorageClientConfig.from_file(profile=args.profile, telemetry=telemetry.init())
+    storage_client = StorageClient(config=storage_client_config)
 
     # Create and run the benchmark
     benchmark = BenchmarkRunner(
