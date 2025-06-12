@@ -290,6 +290,11 @@ class StorageClientConfigLoader:
                             )
                             cls = import_class(attributes_provider_class_name, attributes_provider_module_name)
                             attributes_provider_options = config.get("options", {})
+                            if (
+                                attributes_provider_fully_qualified_name
+                                == _TELEMETRY_ATTRIBUTES_PROVIDER_MAPPING["msc_config"]
+                            ):
+                                attributes_provider_options["config_dict"] = config_dict
                             attributes_provider: AttributesProvider = cls(**attributes_provider_options)
                             attributes_providers.append(attributes_provider)
                         self._metric_attributes_providers = tuple(attributes_providers)

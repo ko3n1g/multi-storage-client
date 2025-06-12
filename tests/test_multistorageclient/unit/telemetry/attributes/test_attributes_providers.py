@@ -18,6 +18,9 @@ import os
 
 import pytest
 
+import multistorageclient
+import multistorageclient.telemetry as telemetry
+import test_multistorageclient.unit.utils.tempdatastore as tempdatastore
 from multistorageclient.telemetry.attributes.base import collect_attributes
 from multistorageclient.telemetry.attributes.environment_variables import EnvironmentVariablesAttributesProvider
 from multistorageclient.telemetry.attributes.host import HostAttributesProvider
@@ -25,6 +28,7 @@ from multistorageclient.telemetry.attributes.msc_config import MSCConfigAttribut
 from multistorageclient.telemetry.attributes.process import ProcessAttributesProvider
 from multistorageclient.telemetry.attributes.static import StaticAttributesProvider
 from multistorageclient.telemetry.attributes.thread import ThreadAttributesProvider
+from test_multistorageclient.unit.utils.telemetry.metrics.export import InMemoryMetricExporter
 
 
 def test_environment_variables_attributes_provider():
@@ -57,7 +61,7 @@ def test_msc_config_attributes_provider():
     attribute_key = "credentials"
     hashed_attribute_key = "credentials_hash"
     hashed_attribute_value = client_credential_value_hash.hexdigest()
-    config_dict_path = "opentelemetry.metrics.exporter.auth.options.client_credential"
+    config_dict_path = "opentelemetry.metrics.exporter.options.auth.client_credential"
     attributes = MSCConfigAttributesProvider(
         attributes={
             attribute_key: {"expression": config_dict_path},
@@ -67,7 +71,7 @@ def test_msc_config_attributes_provider():
         },
         config_dict={
             "opentelemetry": {
-                "metrics": {"exporter": {"auth": {"options": {"client_credential": client_credential_value}}}}
+                "metrics": {"exporter": {"options": {"auth": {"client_credential": client_credential_value}}}}
             }
         },
     ).attributes()
@@ -125,3 +129,43 @@ def test_collect_attributes():
     assert attributes[attribute_key_x] == attribute_value_x
     assert attribute_key_y in attributes
     assert attributes[attribute_key_y] == attribute_value_y_overlay
+
+
+def test_storage_client_with_attributes_providers():
+    with tempdatastore.TemporaryPOSIXDirectory() as temp_data_store:
+        profile = "data"
+        storage_client = multistorageclient.StorageClient(
+            config=multistorageclient.StorageClientConfig.from_dict(
+                config_dict={
+                    "profiles": {
+                        profile: temp_data_store.profile_config_dict(),
+                    },
+                    "opentelemetry": {
+                        "metrics": {
+                            "attributes": [
+                                {
+                                    "type": "environment_variables",
+                                    "options": {"attributes": {"environment_variable": list(os.environ.keys())[0]}},
+                                },
+                                {"type": "host", "options": {"attributes": {"host": "name"}}},
+                                {
+                                    "type": "msc_config",
+                                    "options": {
+                                        "attributes": {
+                                            "msc_config": {"expression": "opentelemetry.metrics.exporter.type"}
+                                        }
+                                    },
+                                },
+                                {"type": "process", "options": {"attributes": {"process": "pid"}}},
+                                {"type": "static", "options": {"attributes": {"static": "static"}}},
+                                {"type": "thread", "options": {"attributes": {"thread": "native_id"}}},
+                            ],
+                            "exporter": {"type": telemetry._fully_qualified_name(InMemoryMetricExporter)},
+                        }
+                    },
+                },
+                telemetry=telemetry.init(mode=telemetry.TelemetryMode.LOCAL),
+            )
+        )
+
+        storage_client.list()
