@@ -215,6 +215,9 @@ class StorageClientConfigLoader:
         profile: str = DEFAULT_POSIX_PROFILE_NAME,
         provider_bundle: Optional[ProviderBundle] = None,
         telemetry: Optional[Telemetry] = None,
+        metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]] = None,
+        metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]] = None,
+        metric_attributes_providers: Optional[Sequence[AttributesProvider]] = None,
     ) -> None:
         """
         Initializes a :py:class:`StorageClientConfigLoader` to create a
@@ -224,7 +227,10 @@ class StorageClientConfigLoader:
         :param config_dict: Dictionary of configuration options.
         :param profile: Name of profile in ``config_dict`` to use to build configuration.
         :param provider_bundle: Optional pre-built :py:class:`multistorageclient.types.ProviderBundle`, takes precedence over ``config_dict``.
-        :param telemetry: Telemetry instance to use.
+        :param telemetry: Optional telemetry instance to use, takes precedence over ``metric_gauges``, ``metric_counters``, and ``metric_attributes_providers``.
+        :param metric_gauges: Optional metric gauges to use.
+        :param metric_counters: Optional metric counters to use.
+        :param metric_attributes_providers: Optional metric attributes providers to use.
         """
         # ProviderBundle takes precedence
         self._provider_bundle = provider_bundle
@@ -258,9 +264,9 @@ class StorageClientConfigLoader:
 
         self._opentelemetry_dict = config_dict.get("opentelemetry", None)
 
-        self._metric_gauges = None
-        self._metric_counters = None
-        self._metric_attributes_providers = None
+        self._metric_gauges = metric_gauges
+        self._metric_counters = metric_counters
+        self._metric_attributes_providers = metric_attributes_providers
         if self._opentelemetry_dict is not None:
             if "metrics" in self._opentelemetry_dict:
                 if telemetry is not None:
@@ -298,9 +304,9 @@ class StorageClientConfigLoader:
                             attributes_provider: AttributesProvider = cls(**attributes_provider_options)
                             attributes_providers.append(attributes_provider)
                         self._metric_attributes_providers = tuple(attributes_providers)
-                else:
+                elif not any([metric_gauges, metric_counters, metric_attributes_providers]):
                     # TODO: Remove "beta" from the log once legacy metrics are removed.
-                    logging.error("No telemetry instance! Disabling beta metrics.")
+                    logger.error("No telemetry instance! Disabling beta metrics.")
 
         self._cache_dict = config_dict.get("cache", None)
 
@@ -319,11 +325,11 @@ class StorageClientConfigLoader:
             )
         if credentials_provider:
             storage_options["credentials_provider"] = credentials_provider
-        if self._metric_gauges:
+        if self._metric_gauges is not None:
             storage_options["metric_gauges"] = self._metric_gauges
-        if self._metric_counters:
+        if self._metric_counters is not None:
             storage_options["metric_counters"] = self._metric_counters
-        if self._metric_attributes_providers:
+        if self._metric_attributes_providers is not None:
             storage_options["metric_attributes_providers"] = self._metric_attributes_providers
         class_name = STORAGE_PROVIDER_MAPPING[storage_provider_name]
         module_name = ".providers"
@@ -577,6 +583,9 @@ class StorageClientConfigLoader:
             cache_config=cache_config,
             cache_manager=cache_manager,
             retry_config=retry_config,
+            metric_gauges=self._metric_gauges,
+            metric_counters=self._metric_counters,
+            metric_attributes_providers=self._metric_attributes_providers,
         )
 
 
@@ -725,6 +734,9 @@ class StorageClientConfig:
     cache_config: Optional[CacheConfig]
     cache_manager: Optional[CacheManager]
     retry_config: Optional[RetryConfig]
+    metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]]
+    metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]]
+    metric_attributes_providers: Optional[Sequence[AttributesProvider]]
 
     _config_dict: Optional[dict[str, Any]]
 
@@ -737,14 +749,20 @@ class StorageClientConfig:
         cache_config: Optional[CacheConfig] = None,
         cache_manager: Optional[CacheManager] = None,
         retry_config: Optional[RetryConfig] = None,
+        metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]] = None,
+        metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]] = None,
+        metric_attributes_providers: Optional[Sequence[AttributesProvider]] = None,
     ):
         self.profile = profile
         self.storage_provider = storage_provider
         self.credentials_provider = credentials_provider
         self.metadata_provider = metadata_provider
         self.cache_config = cache_config
-        self.retry_config = retry_config
         self.cache_manager = cache_manager
+        self.retry_config = retry_config
+        self.metric_gauges = metric_gauges
+        self.metric_counters = metric_counters
+        self.metric_attributes_providers = metric_attributes_providers
 
     @staticmethod
     def from_json(
@@ -924,12 +942,24 @@ class StorageClientConfig:
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        self.profile = state["profile"]
-        loader = StorageClientConfigLoader(state["_config_dict"], self.profile)
+        # Presence checked by __getstate__.
+        config_dict = state["_config_dict"]
+        loader = StorageClientConfigLoader(
+            config_dict=config_dict,
+            profile=state["profile"],
+            metric_gauges=state["metric_gauges"],
+            metric_counters=state["metric_counters"],
+            metric_attributes_providers=state["metric_attributes_providers"],
+        )
         new_config = loader.build_config()
+        self.profile = new_config.profile
         self.storage_provider = new_config.storage_provider
         self.credentials_provider = new_config.credentials_provider
         self.metadata_provider = new_config.metadata_provider
         self.cache_config = new_config.cache_config
-        self.retry_config = new_config.retry_config
         self.cache_manager = new_config.cache_manager
+        self.retry_config = new_config.retry_config
+        self.metric_gauges = new_config.metric_gauges
+        self.metric_counters = new_config.metric_counters
+        self.metric_attributes_providers = new_config.metric_attributes_providers
+        self._config_dict = config_dict

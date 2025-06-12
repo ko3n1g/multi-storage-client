@@ -17,8 +17,10 @@ import pickle
 
 import pytest
 
+import multistorageclient.telemetry as telemetry
 import test_multistorageclient.unit.utils.tempdatastore as tempdatastore
 from multistorageclient import StorageClient, StorageClientConfig
+from test_multistorageclient.unit.utils.telemetry.metrics.export import InMemoryMetricExporter
 
 
 @pytest.mark.parametrize(
@@ -30,7 +32,19 @@ def test_pickle_file_open(temp_data_store_type: type[tempdatastore.TemporaryData
         profile = "data"
         storage_client = StorageClient(
             config=StorageClientConfig.from_dict(
-                config_dict={"profiles": {profile: temp_data_store.profile_config_dict()}}, profile=profile
+                config_dict={
+                    "profiles": {profile: temp_data_store.profile_config_dict()},
+                    "opentelemetry": {
+                        "metrics": {
+                            "attributes": [
+                                {"type": "static", "options": {"attributes": {"test": test_pickle_file_open.__name__}}}
+                            ],
+                            "exporter": {"type": telemetry._fully_qualified_name(InMemoryMetricExporter)},
+                        }
+                    },
+                },
+                profile=profile,
+                telemetry=telemetry.init(),
             )
         )
 
@@ -54,10 +68,26 @@ def test_pickle_file_open(temp_data_store_type: type[tempdatastore.TemporaryData
         with storage_client.open(path=file_path, mode="rb", buffering=0) as file:
             assert file.readall() == file_body_bytes
 
-        # Test pickling of client object.
-        client_pickle = pickle.dumps(storage_client)
-        client_unpickled = pickle.loads(client_pickle)
+        # Test pickling the client.
+        storage_client_copy_1 = pickle.loads(pickle.dumps(storage_client))
 
         # Open the file for reads (bytes) and read via pickled client.
-        with client_unpickled.open(path=file_path) as file:
+        with storage_client_copy_1.open(path=file_path) as file:
             assert file.read() == file_body_bytes
+
+        # Check if telemetry objects were pickled.
+        assert len(storage_client_copy_1._storage_provider._metric_gauges) > 0
+        assert len(storage_client_copy_1._storage_provider._metric_counters) > 0
+        assert len(storage_client_copy_1._storage_provider._metric_attributes_providers) > 0
+
+        # Test re-pickling the client.
+        storage_client_copy_2 = pickle.loads(pickle.dumps(storage_client_copy_1))
+
+        # Open the file for reads (bytes) and read via re-pickled client.
+        with storage_client_copy_2.open(path=file_path) as file:
+            assert file.read() == file_body_bytes
+
+        # Check if telemetry objects were re-pickled.
+        assert len(storage_client_copy_2._storage_provider._metric_gauges) > 0
+        assert len(storage_client_copy_2._storage_provider._metric_counters) > 0
+        assert len(storage_client_copy_2._storage_provider._metric_attributes_providers) > 0

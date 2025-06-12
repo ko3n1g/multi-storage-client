@@ -545,7 +545,6 @@ def init(
             else:
                 telemetry_manager = TelemetryManager(
                     address=address,
-                    authkey="multistorageclient-telemetry".encode(),
                     # Use spawn instead of the platform-specific default (may be fork) to avoid aforementioned issues with fork.
                     ctx=multiprocessing.get_context(method="spawn"),
                 )
