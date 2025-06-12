@@ -61,3 +61,15 @@ def test_s3_attributes(profile_name):
     """Test S3 attributes functionality - storing custom metadata with msc_ prefix."""
     profile = profile_name
     common.test_attributes(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-s3-iad-rust"])
+def test_s3_shortcuts_rust(profile_name):
+    profile = profile_name
+    common.test_shortcuts(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-s3-iad-rust"])
+def test_s3_storage_client_rust(profile_name):
+    profile = profile_name
+    common.test_storage_client(profile)

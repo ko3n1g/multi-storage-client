@@ -453,7 +453,12 @@ class S3StorageProvider(BaseStorageProvider):
                 kwargs["Metadata"] = validated_attributes
 
             rust_unsupported_feature_keys = {"Metadata", "StorageClass", "IfMatch", "IfNoneMatch"}
-            if self._rust_client and all(key not in kwargs for key in rust_unsupported_feature_keys):
+            if (
+                self._rust_client
+                # Rust client doesn't support creating objects with trailing /, see https://github.com/apache/arrow-rs/issues/7026
+                and not path.endswith("/")
+                and all(key not in kwargs for key in rust_unsupported_feature_keys)
+            ):
                 response = run_async_rust_client_method(self._rust_client, "put", key, body)
             else:
                 # Capture the response from put_object
@@ -660,17 +665,19 @@ class S3StorageProvider(BaseStorageProvider):
         file_size: int = 0
 
         if isinstance(f, str):
+            bucket, key = split_path(remote_path)
             file_size = os.path.getsize(f)
 
             # Upload small files
             if file_size <= self._transfer_config.multipart_threshold:
-                with open(f, "rb") as fp:
-                    self._put_object(remote_path, fp.read(), attributes=attributes)
+                if self._rust_client and not attributes:
+                    run_async_rust_client_method(self._rust_client, "upload", f, key)
+                else:
+                    with open(f, "rb") as fp:
+                        self._put_object(remote_path, fp.read(), attributes=attributes)
                 return file_size
 
             # Upload large files using TransferConfig
-            bucket, key = split_path(remote_path)
-
             def _invoke_api() -> int:
                 extra_args = {}
                 if self._is_directory_bucket(bucket):
@@ -678,17 +685,14 @@ class S3StorageProvider(BaseStorageProvider):
                 validated_attributes = validate_attributes(attributes)
                 if validated_attributes:
                     extra_args["Metadata"] = validated_attributes
-                if self._rust_client and not extra_args:
-                    # TODO: Add support for multipart upload of rust client
-                    response = run_async_rust_client_method(self._rust_client, "upload", f, key)
-                else:
-                    response = self._s3_client.upload_file(
-                        Filename=f,
-                        Bucket=bucket,
-                        Key=key,
-                        Config=self._transfer_config,
-                        ExtraArgs=extra_args,
-                    )
+                # TODO: Add support for multipart upload of rust client
+                response = self._s3_client.upload_file(
+                    Filename=f,
+                    Bucket=bucket,
+                    Key=key,
+                    Config=self._transfer_config,
+                    ExtraArgs=extra_args,
+                )
 
                 # Extract and set x-trans-id if present
                 _extract_x_trans_id(response)
@@ -740,32 +744,32 @@ class S3StorageProvider(BaseStorageProvider):
             metadata = self._get_object_metadata(remote_path)
 
         if isinstance(f, str):
+            bucket, key = split_path(remote_path)
             os.makedirs(os.path.dirname(f), exist_ok=True)
+
             # Download small files
             if metadata.content_length <= self._transfer_config.multipart_threshold:
-                with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=os.path.dirname(f), prefix=".") as fp:
-                    temp_file_path = fp.name
-                    fp.write(self._get_object(remote_path))
-                os.rename(src=temp_file_path, dst=f)
+                if self._rust_client:
+                    run_async_rust_client_method(self._rust_client, "download", key, f)
+                else:
+                    with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=os.path.dirname(f), prefix=".") as fp:
+                        temp_file_path = fp.name
+                        fp.write(self._get_object(remote_path))
+                    os.rename(src=temp_file_path, dst=f)
                 return metadata.content_length
 
             # Download large files using TransferConfig
-            bucket, key = split_path(remote_path)
-
             def _invoke_api() -> int:
                 response = None
                 with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=os.path.dirname(f), prefix=".") as fp:
                     temp_file_path = fp.name
-                    if self._rust_client:
-                        # TODO: Add support for multipart download of rust client
-                        response = run_async_rust_client_method(self._rust_client, "download", key, temp_file_path)
-                    else:
-                        response = self._s3_client.download_fileobj(
-                            Bucket=bucket,
-                            Key=key,
-                            Fileobj=fp,
-                            Config=self._transfer_config,
-                        )
+                    # TODO: Add support for multipart download of rust client
+                    response = self._s3_client.download_fileobj(
+                        Bucket=bucket,
+                        Key=key,
+                        Fileobj=fp,
+                        Config=self._transfer_config,
+                    )
 
                 # Extract and set x-trans-id if present
                 _extract_x_trans_id(response)

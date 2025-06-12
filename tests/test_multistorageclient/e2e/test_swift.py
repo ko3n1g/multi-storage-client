@@ -20,14 +20,14 @@ import test_multistorageclient.e2e.common as common
 
 @pytest.mark.parametrize("profile_name", ["test-swift-pdx", "test-swift-pdx-base-path-with-prefix"])
 @pytest.mark.parametrize("config_suffix", ["", "-rclone"])
-def test_s3_shortcuts(profile_name, config_suffix):
+def test_swift_shortcuts(profile_name, config_suffix):
     profile = profile_name + config_suffix
     common.test_shortcuts(profile)
 
 
 @pytest.mark.parametrize("profile_name", ["test-swift-pdx"])
 @pytest.mark.parametrize("config_suffix", ["", "-rclone"])
-def test_s3_storage_client(profile_name, config_suffix):
+def test_swift_storage_client(profile_name, config_suffix):
     profile = profile_name + config_suffix
     common.test_storage_client(profile)
 
@@ -36,3 +36,15 @@ def test_s3_storage_client(profile_name, config_suffix):
 def test_swift_open_with_source_version_check(profile_name):
     profile = profile_name
     common.test_open_with_source_version_check(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-swift-pdx-rust"])
+def test_swift_shortcuts_rust(profile_name):
+    profile = profile_name
+    common.test_shortcuts(profile)
+
+
+@pytest.mark.parametrize("profile_name", ["test-swift-pdx-rust"])
+def test_swift_storage_client_rust(profile_name):
+    profile = profile_name
+    common.test_storage_client(profile)
