@@ -259,6 +259,54 @@ Options: See parameters in :py:class:`multistorageclient.providers.ais.AIStoreSt
            endpoint: https://ais.example.com
            base_path: my-bucket
 
+``rust_client`` (experimental)
+------------------------------
+
+.. warning::
+   The Rust client is an experimental feature starting from v0.24 and is subject to change in future releases.
+
+Due to Python's Global Interpreter Lock (GIL), achieving optimal multi-threading performance within a single Python process is challenging.
+To address this limitation, MSC introduces an experimental Rust client, which aims to improve performance in multi-threaded scenarios.
+
+To enable the Rust client, add the ``rust_client`` option to your storage provider configuration.
+
+.. note::
+   Currently, the Rust client is only supported for S3-compatible storage providers, including ``s3``, ``gcs_s3``, and ``s8k``.
+
+.. code-block:: yaml
+   :caption: Example S3 storage provider configuration with Rust client.
+
+   profiles:
+     my-profile:
+       storage_provider:
+         type: s3
+         options:
+           base_path: my-bucket
+           region_name: us-east-1
+           rust_client: {}
+
+When the Rust client is enabled, it will replace Python implementations for the following storage provider operations:
+
+* :py:class:`multistorageclient.types.StorageProvider.put_object`
+* :py:class:`multistorageclient.types.StorageProvider.get_object`
+* :py:class:`multistorageclient.types.StorageProvider.upload_file`
+* :py:class:`multistorageclient.types.StorageProvider.download_file`
+
+.. note::
+   For `upload_file()` and `download_file()`, the Rust client is only used for files smaller than the `multipart_threshold`.
+   Larger files automatically fall back to the Python implementation to handle multipart uploads/downloads.
+   
+   For `put_object()` and `upload_file()`, if `attributes` is provided, the Rust client will not be used as well.
+
+Other storage provider operations continue to use the Python implementation:
+
+* :py:class:`multistorageclient.types.StorageProvider.list_objects`
+* :py:class:`multistorageclient.types.StorageProvider.copy_object`
+* :py:class:`multistorageclient.types.StorageProvider.delete_object`
+* :py:class:`multistorageclient.types.StorageProvider.get_object_metadata`
+* :py:class:`multistorageclient.types.StorageProvider.glob`
+* :py:class:`multistorageclient.types.StorageProvider.is_file`
+
 Metadata Providers
 ==================
 
