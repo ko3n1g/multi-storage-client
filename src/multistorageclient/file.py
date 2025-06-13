@@ -294,28 +294,38 @@ class ObjectFile(IO):
         try:
             if self._check_source_version == SourceVersionCheckMode.INHERIT:
                 if self._cache_manager.use_etag():
-                    cache_path = f"{self._remote_path}:{self._object_metadata.etag}"
+                    source_version = self._object_metadata.etag
                 else:
-                    cache_path = f"{self._remote_path}:{None}"
+                    source_version = None
             elif self._check_source_version == SourceVersionCheckMode.ENABLE:
-                cache_path = f"{self._remote_path}:{self._object_metadata.etag}"
+                source_version = self._object_metadata.etag
             else:
-                cache_path = f"{self._remote_path}:{None}"
+                source_version = None
 
-            if self._cache_manager.contains(cache_path, self._check_source_version):
+            if self._cache_manager.contains(
+                key=self._remote_path, check_source_version=self._check_source_version, source_version=source_version
+            ):
                 # Read from cache
-                file_object = self._cache_manager.open(cache_path, self._mode, self._check_source_version)
+                file_object = self._cache_manager.open(
+                    self._remote_path, self._mode, source_version, self._check_source_version
+                )
             else:
                 # Download file and put it into the cache
-                file_lock = self._cache_manager.acquire_lock(cache_path)
+                file_lock = self._cache_manager.acquire_lock(self._remote_path)
                 with file_lock:
-                    if not self._cache_manager.contains(cache_path, self._check_source_version):
+                    if not self._cache_manager.contains(
+                        key=self._remote_path,
+                        check_source_version=self._check_source_version,
+                        source_version=source_version,
+                    ):
                         # The process writes the file to a temporary file and move it to the cache directory.
                         temp_file_path = self._get_temp_file_path()
                         self._storage_client.download_file(self._remote_path, temp_file_path)
-                        self._cache_manager.set(cache_path, temp_file_path)
+                        self._cache_manager.set(self._remote_path, temp_file_path, source_version)
 
-                file_object = self._cache_manager.open(cache_path, self._mode, self._check_source_version)
+                file_object = self._cache_manager.open(
+                    self._remote_path, self._mode, source_version, self._check_source_version
+                )
             if file_object is None:
                 raise FileNotFoundError(f"Unexpected error, file not found at {self._remote_path}")
 

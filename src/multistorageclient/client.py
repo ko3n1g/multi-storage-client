@@ -68,22 +68,15 @@ class StorageClient:
         self._retry_config = self._config.retry_config
         self._cache_manager = self._config.cache_manager
 
-    def _build_cache_path(self, path: str) -> str:
+    def _get_source_version(self, path: str) -> Optional[str]:
         """
-        Build cache path with or without etag.
+        Get etag from metadata provider or storage provider.
         """
-        cache_path = f"{path}:{None}"
-
         if self._metadata_provider:
-            if self._cache_manager and self._cache_manager.use_etag():
-                metadata = self._metadata_provider.get_object_metadata(path)
-                cache_path = f"{path}:{metadata.etag}"
+            metadata = self._metadata_provider.get_object_metadata(path)
         else:
-            if self._cache_manager and self._cache_manager.use_etag():
-                metadata = self._storage_provider.get_object_metadata(path)
-                cache_path = f"{path}:{metadata.etag}"
-
-        return cache_path
+            metadata = self._storage_provider.get_object_metadata(path)
+        return metadata.etag
 
     def _is_cache_enabled(self) -> bool:
         return self._cache_manager is not None and not self._is_posix_file_storage_provider()
@@ -121,12 +114,12 @@ class StorageClient:
         # Read from cache if the file exists
         if self._is_cache_enabled():
             assert self._cache_manager is not None
-            cache_path = self._build_cache_path(path)
-            data = self._cache_manager.read(cache_path)
+            source_version = self._get_source_version(path)
+            data = self._cache_manager.read(path, source_version)
 
             if data is None:
                 data = self._storage_provider.get_object(path)
-                self._cache_manager.set(cache_path, data)
+                self._cache_manager.set(path, data, source_version)
 
             return data
 

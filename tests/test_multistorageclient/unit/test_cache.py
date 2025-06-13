@@ -156,17 +156,19 @@ def test_cache_manager_read_file_with_etag(profile_name, tmpdir, cache_manager_w
 
     test_uuid = str(uuid.uuid4())
     # Test with etag in the key
-    key_with_etag = f"bucket/{test_uuid}/test_file.txt:etag123"
-    cache_manager_with_etag.set(key_with_etag, str(file))
-    assert cache_manager_with_etag.read(key_with_etag) == b"cached data"
+    key = f"bucket/{test_uuid}/test_file.txt"
+    source_version = "etag123"
+    cache_manager_with_etag.set(key, str(file), source_version=source_version)
+    assert cache_manager_with_etag.read(key, source_version=source_version) == b"cached data"
 
     # Test with binary data and etag
-    key_with_etag_bin = f"bucket/{test_uuid}/test_file.bin:etag456"
-    cache_manager_with_etag.set(key_with_etag_bin, b"binary data")
-    assert cache_manager_with_etag.read(key_with_etag_bin) == b"binary data"
+    key_bin = f"bucket/{test_uuid}/test_file.bin"
+    source_version = "etag456"
+    cache_manager_with_etag.set(key_bin, b"binary data", source_version=source_version)
+    assert cache_manager_with_etag.read(key_bin, source_version=source_version) == b"binary data"
 
     # Verify that the file is stored with the etag in the path
-    expected_path = os.path.join(tmpdir, profile_name, cache_manager_with_etag.get_cache_key(key_with_etag))
+    expected_path = os.path.join(tmpdir, profile_name, cache_manager_with_etag.get_cache_key(key))
     assert os.path.exists(expected_path), f"File should exist at {expected_path}"
 
     # Test that reading without etag returns None
@@ -181,28 +183,29 @@ def test_cache_manager_read_delete_file_with_etag(profile_name, tmpdir, cache_ma
     file = tmpdir.join(profile_name, "test_file.txt")
     file.write("cached data")
 
-    key_with_etag = f"bucket/{test_uuid}/test_file.txt:etag123"
+    key = f"bucket/{test_uuid}/test_file.txt"
+    source_version = "etag123"
 
-    with cache_manager_with_etag.acquire_lock(key_with_etag):
-        cache_manager_with_etag.set(key_with_etag, str(file))
+    with cache_manager_with_etag.acquire_lock(key):
+        cache_manager_with_etag.set(key, str(file), source_version=source_version)
 
     # Verify the lock file is in the same directory as the file
-    cache_key = cache_manager_with_etag.get_cache_key(key_with_etag)
+    cache_key = cache_manager_with_etag.get_cache_key(key)
     lock_path = os.path.join(tmpdir, profile_name, os.path.dirname(cache_key), f".{os.path.basename(cache_key)}.lock")
     assert os.path.exists(lock_path)
 
     # Verify we can read the file
-    assert cache_manager_with_etag.read(key_with_etag) == b"cached data"
+    assert cache_manager_with_etag.read(key, source_version=source_version) == b"cached data"
 
     # Delete the file
-    cache_manager_with_etag.delete(key_with_etag)
+    cache_manager_with_etag.delete(key)
 
     # Verify the file and its lock are deleted
     assert not os.path.exists(os.path.join(tmpdir, profile_name, cache_key))
     assert not os.path.exists(lock_path)
 
     # Test that reading after delete returns None
-    assert cache_manager_with_etag.read(key_with_etag) is None
+    assert cache_manager_with_etag.read(key, source_version=source_version) is None
 
 
 def test_cache_manager_read_delete_file(profile_name, tmpdir, cache_manager):
@@ -486,19 +489,22 @@ def test_random_eviction_policy(profile_name, random_cache_config):
 def verify_cache_operations(cache_manager):
     # Add files to the cache (each file is 3 MB)
     test_uuid = str(uuid.uuid4())
-    cache_manager.set(f"{test_uuid}/test_file1:etag1", b"a" * 1 * 1024 * 1024)  # 1 MB - First in
-    cache_manager.set(f"{test_uuid}/test_file2:etag2", b"b" * 1 * 1024 * 1024)  # 1 MB - Second in
-    cache_manager.set(f"{test_uuid}/test_file3:etag3", b"c" * 1 * 1024 * 1024)  # 1 MB - Third in
+    key1 = f"{test_uuid}/test_file1"
+    key2 = f"{test_uuid}/test_file2"
+    key3 = f"{test_uuid}/test_file3"
+    cache_manager.set(key1, b"a" * 1 * 1024 * 1024, source_version="etag1")  # 1 MB - First in
+    cache_manager.set(key2, b"b" * 1 * 1024 * 1024, source_version="etag2")  # 1 MB - Second in
+    cache_manager.set(key3, b"c" * 1 * 1024 * 1024, source_version="etag3")  # 1 MB - Third in
 
     # Access files in different order to verify FIFO is independent of access patterns
-    cache_manager.read(f"{test_uuid}/test_file3:etag3")  # Access the newest file
-    cache_manager.read(f"{test_uuid}/test_file2:etag2")  # Access the middle file
-    cache_manager.read(f"{test_uuid}/test_file1:etag1")  # Access the oldest file
+    cache_manager.read(key3, source_version="etag3")  # Access the newest file
+    cache_manager.read(key2, source_version="etag2")  # Access the middle file
+    cache_manager.read(key1, source_version="etag1")  # Access the oldest file
 
     # Verify that later files are still in the cache with correct ETags
-    assert cache_manager.contains(f"{test_uuid}/test_file1:etag1"), "Second file in should be kept"
-    assert cache_manager.contains(f"{test_uuid}/test_file2:etag2"), "Third file in should be kept"
-    assert cache_manager.contains(f"{test_uuid}/test_file3:etag3"), "Newly added file should be in the cache"
+    assert cache_manager.contains(key1, source_version="etag1"), "Second file in should be kept"
+    assert cache_manager.contains(key2, source_version="etag2"), "Third file in should be kept"
+    assert cache_manager.contains(key3, source_version="etag3"), "Newly added file should be in the cache"
 
 
 def create_legacy_cache_config(profile_config, tmpdir):

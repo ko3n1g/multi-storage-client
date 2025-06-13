@@ -93,24 +93,33 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def read(self, key: str) -> Optional[bytes]:
+    def read(self, key: str, source_version: Optional[str] = None) -> Optional[bytes]:
         """Read the contents of a file from the cache if it exists."""
         pass
 
     @abstractmethod
     def open(
-        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+        self,
+        key: str,
+        mode: str = "rb",
+        source_version: Optional[str] = None,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
     ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         pass
 
     @abstractmethod
-    def set(self, key: str, source: Union[str, bytes]) -> None:
+    def set(self, key: str, source: Union[str, bytes], source_version: Optional[str] = None) -> None:
         """Store a file in the cache."""
         pass
 
     @abstractmethod
-    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
+    def contains(
+        self,
+        key: str,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
+        source_version: Optional[str] = None,
+    ) -> bool:
         """Check if the cache contains a file corresponding to the given key."""
         pass
 
@@ -322,14 +331,12 @@ class FileSystemBackend(CacheBackend):
         cache_key = self.get_cache_key(key)
         return os.path.join(self._cache_dir, self._profile, cache_key)
 
-    def read(self, key: str) -> Optional[bytes]:
+    def read(self, key: str, source_version: Optional[str] = None) -> Optional[bytes]:
         """Read the contents of a file from the cache if it exists."""
         success = True
         try:
             try:
-                if self.contains(key):
-                    # Handle both key formats: with and without colon
-                    key, _ = self._split_key(key)
+                if self.contains(key=key, source_version=source_version):
                     file_path = self._get_cache_file_path(key)
                     with open(file_path, "rb") as fp:
                         data = fp.read()
@@ -346,15 +353,17 @@ class FileSystemBackend(CacheBackend):
             self._metrics_helper.increase(operation="READ", success=success)
 
     def open(
-        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+        self,
+        key: str,
+        mode: str = "rb",
+        source_version: Optional[str] = None,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
     ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         success = True
         try:
             try:
-                if self.contains(key, check_source_version):
-                    # Handle both key formats: with and without colon
-                    key, _ = self._split_key(key)
+                if self.contains(key=key, check_source_version=check_source_version, source_version=source_version):
                     file_path = self._get_cache_file_path(key)
                     # Update access time based on eviction policy
                     self._update_access_time(file_path)
@@ -368,12 +377,10 @@ class FileSystemBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="OPEN", success=success)
 
-    def set(self, key: str, source: Union[str, bytes]) -> None:
+    def set(self, key: str, source: Union[str, bytes], source_version: Optional[str] = None) -> None:
         """Store a file in the cache."""
         success = True
         try:
-            path, etag = self._split_key(key)
-
             file_path = self._get_cache_file_path(key)
             # Ensure the directory exists
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -395,9 +402,9 @@ class FileSystemBackend(CacheBackend):
                 os.chmod(file_path, mode=stat.S_IRUSR | stat.S_IWUSR)
 
             # Set extended attribute (e.g., ETag)
-            if etag:
+            if source_version:
                 try:
-                    xattr.setxattr(file_path, "user.etag", etag.encode("utf-8"))
+                    xattr.setxattr(file_path, "user.etag", source_version.encode("utf-8"))
                 except OSError as e:
                     logging.warning(f"Failed to set xattr on {file_path}: {e}")
 
@@ -415,12 +422,14 @@ class FileSystemBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="SET", success=success)
 
-    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
+    def contains(
+        self,
+        key: str,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
+        source_version: Optional[str] = None,
+    ) -> bool:
         """Check if the cache contains a file corresponding to the given key."""
         try:
-            # Parse key and etag
-            path, source_etag = self._split_key(key)
-
             # Get cache path
             file_path = self._get_cache_file_path(key)
 
@@ -438,10 +447,10 @@ class FileSystemBackend(CacheBackend):
             # Verify etag matches if checking is enabled
             try:
                 xattr_value = xattr.getxattr(file_path, "user.etag")
-                stored_etag = xattr_value.decode("utf-8")
-                return stored_etag is not None and stored_etag == source_etag
+                stored_version = xattr_value.decode("utf-8")
+                return stored_version is not None and stored_version == source_version
             except OSError:
-                # If xattr fails, assume etag doesn't match
+                # If xattr fails, assume version doesn't match
                 return False
 
         except Exception as e:
@@ -451,7 +460,6 @@ class FileSystemBackend(CacheBackend):
     def delete(self, key: str) -> None:
         """Delete a file from the cache."""
         try:
-            key, _ = self._split_key(key)
             self.delete_file(key)
         finally:
             self._metrics_helper.increase(operation="DELETE", success=True)
@@ -492,8 +500,6 @@ class FileSystemBackend(CacheBackend):
 
     def acquire_lock(self, key: str) -> BaseFileLock:
         """Create a FileLock object for a given key."""
-        key, _ = self._split_key(key)
-
         file_dir = os.path.dirname(os.path.join(self._get_cache_dir(), key))
 
         # Create lock file in the same directory as the file
@@ -592,13 +598,12 @@ class StorageProviderBackend(CacheBackend):
         cache_key = self.get_cache_key(key)
         return f"{self._get_cache_dir()}/{cache_key}"
 
-    def read(self, key: str) -> Optional[bytes]:
+    def read(self, key: str, source_version: Optional[str] = None) -> Optional[bytes]:
         """Read the contents of a file from the cache if it exists."""
         success = True
         try:
             try:
-                if self.contains(key):
-                    key, _ = key.split(":")
+                if self.contains(key=key, source_version=source_version):
                     cache_path = f"{self._get_cache_dir()}/{key}"
                     return self._storage_provider.get_object(cache_path)  # type: ignore
             except Exception:
@@ -611,16 +616,19 @@ class StorageProviderBackend(CacheBackend):
             self._metrics_helper.increase(operation="READ", success=success)
 
     def open(
-        self, key: str, mode: str = "rb", check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT
+        self,
+        key: str,
+        mode: str = "rb",
+        source_version: Optional[str] = None,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
     ) -> Optional[Any]:
         """Open a file from the cache and return the file object."""
         success = True
 
         try:
             try:
-                if self.contains(key, check_source_version):
-                    path, _ = key.split(":")
-                    cache_path = f"{self._get_cache_dir()}/{path}"
+                if self.contains(key=key, check_source_version=check_source_version, source_version=source_version):
+                    cache_path = f"{self._get_cache_dir()}/{key}"
                     data = self._storage_provider.get_object(cache_path)  # type: ignore
                     if "b" in mode:
                         file_obj = BytesIO(data if isinstance(data, bytes) else data.encode())
@@ -638,14 +646,11 @@ class StorageProviderBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="OPEN", success=success)
 
-    def set(self, key: str, source: Union[str, bytes]) -> None:
+    def set(self, key: str, source: Union[str, bytes], source_version: Optional[str] = None) -> None:
         """Store a file in the cache."""
         success = True
         try:
-            # Handle key with or without ETag
-            path, etag = self._split_key(key)
-
-            cache_path = f"{self._get_cache_dir()}/{path}"
+            cache_path = f"{self._get_cache_dir()}/{key}"
             if isinstance(source, str):
                 new_file_size = os.path.getsize(source)
                 with open(source, "rb") as f:
@@ -660,7 +665,7 @@ class StorageProviderBackend(CacheBackend):
                 )
 
             # Store the object in S3 Express with etag metadata
-            metadata = {"etag": etag} if etag else None
+            metadata = {"etag": source_version} if source_version else None
             # this metadata is used by cache backend to trace the etag of the source file
             # it is not the same metadata for the object in the actual bucket
             # for the actual file metadata, a separate call will needed to be made to the actual bucket
@@ -678,17 +683,20 @@ class StorageProviderBackend(CacheBackend):
         finally:
             self._metrics_helper.increase(operation="SET", success=success)
 
-    def contains(self, key: str, check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT) -> bool:
+    def contains(
+        self,
+        key: str,
+        check_source_version: SourceVersionCheckMode = SourceVersionCheckMode.INHERIT,
+        source_version: Optional[str] = None,
+    ) -> bool:
         """Check if the cache contains a file corresponding to the given key.
 
         When use_etag=False, we only check if the file exists in cache.
         When use_etag=True, we also verify that the etag matches.
         """
         try:
-            # Parse key and etag
-            path, source_etag = self._split_key(key)
             # Get cache path and metadata
-            cache_path = f"{self._get_cache_dir()}/{path}"
+            cache_path = f"{self._get_cache_dir()}/{key}"
             metadata = self._storage_provider.get_object_metadata(cache_path)  # type: ignore
 
             # If no metadata, file doesn't exist
@@ -704,9 +712,9 @@ class StorageProviderBackend(CacheBackend):
 
             # Verify etag matches if checking is enabled
             if metadata.metadata:
-                stored_etag = metadata.metadata.get("etag")
+                stored_version = metadata.metadata.get("etag")
 
-                result = stored_etag is not None and stored_etag == source_etag
+                result = stored_version is not None and stored_version == source_version
                 return result
 
             return False
@@ -721,8 +729,7 @@ class StorageProviderBackend(CacheBackend):
         """Delete a file from the cache."""
         success = True
         try:
-            path, _ = self._split_key(key)
-            cache_path = f"{self._get_cache_dir()}/{path}"
+            cache_path = f"{self._get_cache_dir()}/{key}"
             self._storage_provider.delete_object(cache_path)  # type: ignore
         except Exception:
             success = False
