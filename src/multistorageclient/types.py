@@ -232,6 +232,7 @@ class StorageProvider(ABC):
         start_after: Optional[str] = None,
         end_at: Optional[str] = None,
         include_directories: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
         """
         Lists objects in the storage provider under the specified prefix.
@@ -240,6 +241,7 @@ class StorageProvider(ABC):
         :param start_after: The key to start after (i.e. exclusive). An object with this key doesn't have to exist.
         :param end_at: The key to end at (i.e. inclusive). An object with this key doesn't have to exist.
         :param include_directories: Whether to include directories in the result. When True, directories are returned alongside objects.
+        :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
         :return: An iterator over objects metadata under the specified prefix.
         """
@@ -271,11 +273,12 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
         """
         Matches and retrieves a list of object keys in the storage provider that match the specified pattern.
 
         :param pattern: The pattern to match object keys against, supporting wildcards (e.g., ``*.txt``).
+        :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
         :return: A list of object keys that match the specified pattern.
         """

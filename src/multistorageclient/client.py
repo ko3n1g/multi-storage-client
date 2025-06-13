@@ -283,6 +283,7 @@ class StorageClient:
         self,
         pattern: str,
         include_url_prefix: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> list[str]:
         """
         Matches and retrieves a list of objects in the storage provider that
@@ -290,13 +291,14 @@ class StorageClient:
 
         :param pattern: The pattern to match object paths against, supporting wildcards (e.g., ``*.txt``).
         :param include_url_prefix: Whether to include the URL prefix ``msc://profile`` in the result.
+        :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
         :return: A list of object paths that match the pattern.
         """
         if self._metadata_provider:
             results = self._metadata_provider.glob(pattern)
         else:
-            results = self._storage_provider.glob(pattern)
+            results = self._storage_provider.glob(pattern, attribute_filter_expression)
 
         if include_url_prefix:
             results = [join_paths(f"{MSC_PROTOCOL}{self._config.profile}", path) for path in results]
@@ -310,6 +312,7 @@ class StorageClient:
         end_at: Optional[str] = None,
         include_directories: bool = False,
         include_url_prefix: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
         """
         Lists objects in the storage provider under the specified prefix.
@@ -319,13 +322,16 @@ class StorageClient:
         :param end_at: The key to end at (i.e. inclusive). An object with this key doesn't have to exist.
         :param include_directories: Whether to include directories in the result. When True, directories are returned alongside objects.
         :param include_url_prefix: Whether to include the URL prefix ``msc://profile`` in the result.
+        :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
         :return: An iterator over objects.
         """
         if self._metadata_provider:
             objects = self._metadata_provider.list_objects(prefix, start_after, end_at, include_directories)
         else:
-            objects = self._storage_provider.list_objects(prefix, start_after, end_at, include_directories)
+            objects = self._storage_provider.list_objects(
+                prefix, start_after, end_at, include_directories, attribute_filter_expression
+            )
 
         for object in objects:
             if include_url_prefix:

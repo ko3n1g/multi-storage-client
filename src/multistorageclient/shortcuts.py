@@ -213,7 +213,7 @@ def open(url: str, mode: str = "rb", **kwargs: Any) -> Union[PosixFile, ObjectFi
     return client.open(path, mode, **kwargs)
 
 
-def glob(pattern: str) -> list[str]:
+def glob(pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
     """
     Return a list of files matching a pattern.
 
@@ -222,6 +222,7 @@ def glob(pattern: str) -> list[str]:
     list of matching files.
 
     :param pattern: The glob-style pattern to match files. (example: ``msc://profile/prefix/**/*.tar``)
+    :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
     :return: A list of file paths matching the pattern.
 
@@ -229,9 +230,9 @@ def glob(pattern: str) -> list[str]:
     """
     client, path = resolve_storage_client(pattern)
     if not pattern.startswith(MSC_PROTOCOL) and client.profile == DEFAULT_POSIX_PROFILE_NAME:
-        return client.glob(path, include_url_prefix=False)
+        return client.glob(path, include_url_prefix=False, attribute_filter_expression=attribute_filter_expression)
     else:
-        return client.glob(path, include_url_prefix=True)
+        return client.glob(path, include_url_prefix=True, attribute_filter_expression=attribute_filter_expression)
 
 
 def upload_file(url: str, local_path: str, attributes: Optional[dict[str, str]] = None) -> None:
@@ -313,6 +314,7 @@ def list(
     start_after: Optional[str] = None,
     end_at: Optional[str] = None,
     include_directories: bool = False,
+    attribute_filter_expression: Optional[str] = None,
 ) -> Iterator[ObjectMetadata]:
     """
     Lists the contents of the specified URL prefix.
@@ -324,6 +326,7 @@ def list(
     :param start_after: The key to start after (i.e. exclusive). An object with this key doesn't have to exist.
     :param end_at: The key to end at (i.e. inclusive). An object with this key doesn't have to exist.
     :param include_directories: Whether to include directories in the result. When True, directories are returned alongside objects.
+    :param attribute_filter_expression: The attribute filter expression to apply to the result.
 
     :return: An iterator of :py:class:`ObjectMetadata` objects representing the files (and optionally directories)
              accessible under the specified URL prefix. The returned keys will always be prefixed with msc://.
@@ -335,6 +338,7 @@ def list(
         end_at=end_at,
         include_directories=include_directories,
         include_url_prefix=True,
+        attribute_filter_expression=attribute_filter_expression,
     )
 
 

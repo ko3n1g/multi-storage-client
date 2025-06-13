@@ -888,3 +888,256 @@ def test_shortcuts_attributes_validation(temp_data_store_type: type[tempdatastor
             msc.write(
                 f"{MSC_PROTOCOL}test/test-long-value-{test_uuid}.txt", test_content, attributes=long_value_attributes
             )
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_msc_list_with_attribute_filter_expression(
+    temp_data_store_type: type[tempdatastore.TemporaryDataStore],
+) -> None:
+    """Test msc.list with attribute_filter_expression functionality."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for attribute filtering"
+        test_uuid = str(uuid.uuid4())
+        base_path = f"test-list-filters-{test_uuid}"
+
+        # Create test files with different attributes
+        test_files = [
+            {
+                "name": "model_v1.bin",
+                "attributes": {"model_name": "gpt", "version": "1.0", "author": "alice", "priority": "10"},
+            },
+            {
+                "name": "model_v2.bin",
+                "attributes": {"model_name": "gpt", "version": "2.0", "author": "bob", "priority": "5"},
+            },
+            {
+                "name": "data_v1.bin",
+                "attributes": {"model_name": "bert", "version": "1.0", "author": "alice", "priority": "15"},
+            },
+            {
+                "name": "data_v2.bin",
+                "attributes": {"model_name": "bert", "version": "1.5", "author": "charlie", "priority": "8"},
+            },
+            {
+                "name": "config.txt",
+                "attributes": {"type": "config", "version": "0.5", "author": "admin", "priority": "20"},
+            },
+        ]
+
+        try:
+            # Create test files with attributes
+            for test_file in test_files:
+                file_path = f"{MSC_PROTOCOL}test/{base_path}/{test_file['name']}"
+                msc.write(file_path, test_content, attributes=test_file["attributes"])
+
+            # Test equality filter
+            results = list(
+                msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='model_name = "gpt"')
+            )
+            assert len(results) == 2
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "model_v1.bin" in result_names
+            assert "model_v2.bin" in result_names
+
+            # Test inequality filter
+            results = list(msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='author != "alice"'))
+            assert len(results) == 3
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "model_v2.bin" in result_names
+            assert "data_v2.bin" in result_names
+            assert "config.txt" in result_names
+
+            # Test numeric comparison (greater than)
+            results = list(msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='priority > "10"'))
+            assert len(results) == 2
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "data_v1.bin" in result_names  # priority: 15
+            assert "config.txt" in result_names  # priority: 20
+
+            # Test numeric comparison (less than or equal)
+            results = list(msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='priority <= "8"'))
+            assert len(results) == 2
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "model_v2.bin" in result_names  # priority: 5
+            assert "data_v2.bin" in result_names  # priority: 8
+
+            # Test string comparison (version ordering)
+            results = list(msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='version >= "1.0"'))
+            assert len(results) == 4  # All except config.txt with version "0.5"
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "config.txt" not in result_names
+
+            # Test multiple filters (AND logic)
+            results = list(
+                msc.list(
+                    f"{MSC_PROTOCOL}test/{base_path}",
+                    attribute_filter_expression='(model_name = "bert" AND author != "charlie")',
+                )
+            )
+            assert len(results) == 1
+            result_names = [os.path.basename(r.key) for r in results]
+            assert "data_v1.bin" in result_names  # bert model by alice, not charlie
+
+            # Test filter with no matches
+            results = list(
+                msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression='model_name = "nonexistent"')
+            )
+            assert len(results) == 0
+
+            # Test empty filter (should return all files)
+            results = list(msc.list(f"{MSC_PROTOCOL}test/{base_path}", attribute_filter_expression=""))
+            assert len(results) == 5
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{base_path}", recursive=True)
+            except Exception:
+                pass
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[
+        [tempdatastore.TemporaryAWSS3Bucket],
+        [tempdatastore.TemporaryPOSIXDirectory],
+    ],
+)
+def test_msc_glob_with_attribute_filter_expression(
+    temp_data_store_type: type[tempdatastore.TemporaryDataStore],
+) -> None:
+    """Test msc.glob with attribute_filter_expression functionality."""
+    # Clear the instance cache to ensure that the config is not reused from the previous test
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    with temp_data_store_type() as temp_data_store:
+        config.setup_msc_config(
+            config_dict={
+                "profiles": {
+                    "test": temp_data_store.profile_config_dict(),
+                },
+            }
+        )
+
+        test_content = b"test content for glob attribute filtering"
+        test_uuid = str(uuid.uuid4())
+        base_path = f"test-glob-filters-{test_uuid}"
+
+        # Create test files with different attributes in various subdirectories
+        test_files = [
+            {
+                "path": f"{base_path}/models/gpt/model_v1.bin",
+                "attributes": {"model_name": "gpt", "version": "1.0", "environment": "prod", "size": "large"},
+            },
+            {
+                "path": f"{base_path}/models/gpt/model_v2.bin",
+                "attributes": {"model_name": "gpt", "version": "2.0", "environment": "dev", "size": "small"},
+            },
+            {
+                "path": f"{base_path}/models/bert/data_v1.bin",
+                "attributes": {"model_name": "bert", "version": "1.0", "environment": "prod", "size": "medium"},
+            },
+            {
+                "path": f"{base_path}/data/training/dataset.bin",
+                "attributes": {"type": "dataset", "version": "1.5", "environment": "test", "size": "large"},
+            },
+            {
+                "path": f"{base_path}/config/settings.txt",
+                "attributes": {"type": "config", "version": "0.5", "environment": "prod", "size": "small"},
+            },
+            {
+                "path": f"{base_path}/temp/cache.tmp",
+                "attributes": {"type": "temp", "version": "1.0", "environment": "dev", "size": "medium"},
+            },
+        ]
+
+        try:
+            # Create test files with attributes
+            for test_file in test_files:
+                file_path = f"{MSC_PROTOCOL}test/{test_file['path']}"
+                msc.write(file_path, test_content, attributes=test_file["attributes"])
+
+            # Test glob with equality filter - find all gpt models
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/**/*.bin", attribute_filter_expression='model_name = "gpt"'
+            )
+            assert len(results) == 2
+            assert all("gpt" in path for path in results)
+
+            # Test glob with inequality filter - find all non-prod environments
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/**/*", attribute_filter_expression='environment != "prod"'
+            )
+            assert len(results) == 3  # dev + test + dev files
+            result_basenames = [os.path.basename(path) for path in results]
+            assert "model_v2.bin" in result_basenames  # dev
+            assert "dataset.bin" in result_basenames  # test
+            assert "cache.tmp" in result_basenames  # dev
+
+            # Test glob with string comparison - versions >= 1.0
+            results = msc.glob(f"{MSC_PROTOCOL}test/{base_path}/**/*", attribute_filter_expression='version >= "1.0"')
+            assert len(results) == 5  # All except settings.txt (version 0.5)
+            result_basenames = [os.path.basename(path) for path in results]
+            assert "settings.txt" not in result_basenames
+
+            # Test glob with multiple filters (AND logic) - large files in prod
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/**/*",
+                attribute_filter_expression='(size = "large" AND environment = "prod")',
+            )
+            assert len(results) == 1
+            assert "model_v1.bin" in results[0]
+
+            # Test glob pattern specificity with filters - only .bin files that are small
+            results = msc.glob(f"{MSC_PROTOCOL}test/{base_path}/**/*.bin", attribute_filter_expression='size = "small"')
+            assert len(results) == 1
+            assert "model_v2.bin" in results[0]
+
+            # Test glob with nested path pattern and filters
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/models/**/*", attribute_filter_expression='version = "1.0"'
+            )
+            assert len(results) == 2
+            result_basenames = [os.path.basename(path) for path in results]
+            assert "model_v1.bin" in result_basenames
+            assert "data_v1.bin" in result_basenames
+
+            # Test glob with filters that return no results
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/**/*", attribute_filter_expression='model_name = "nonexistent"'
+            )
+            assert len(results) == 0
+
+            # Test glob with empty filters (should return all matching pattern)
+            results = msc.glob(f"{MSC_PROTOCOL}test/{base_path}/**/*.bin", attribute_filter_expression="")
+            assert len(results) == 4  # All .bin files
+
+            # Test complex glob pattern with attribute filters
+            results = msc.glob(
+                f"{MSC_PROTOCOL}test/{base_path}/**/model_*.bin", attribute_filter_expression='environment != "test"'
+            )
+            assert len(results) == 2  # model_v1.bin (prod) and model_v2.bin (dev)
+
+        finally:
+            # Clean up
+            try:
+                msc.delete(f"{MSC_PROTOCOL}test/{base_path}", recursive=True)
+            except Exception:
+                pass

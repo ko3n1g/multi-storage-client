@@ -31,7 +31,7 @@ import xattr
 from ..telemetry import Telemetry
 from ..telemetry.attributes.base import AttributesProvider
 from ..types import AWARE_DATETIME_MIN, ObjectMetadata, Range
-from ..utils import validate_attributes
+from ..utils import create_attribute_filter_evaluator, matches_attribute_filter_expression, validate_attributes
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")
@@ -354,9 +354,17 @@ class PosixFileStorageProvider(BaseStorageProvider):
 
             return self._collect_metrics(_invoke_api, operation="GET", path=remote_path, get_object_size=filesize)
 
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
         pattern = self._prepend_base_path(pattern)
         keys = list(glob.glob(pattern, recursive=True))
+        if attribute_filter_expression:
+            filtered_keys = []
+            evaluator = create_attribute_filter_evaluator(attribute_filter_expression)
+            for key in keys:
+                obj_metadata = self._get_object_metadata(key)
+                if matches_attribute_filter_expression(obj_metadata, evaluator):
+                    filtered_keys.append(key)
+            keys = filtered_keys
         if self._base_path == "/":
             return keys
         else:

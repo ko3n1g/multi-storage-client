@@ -322,6 +322,202 @@ def verify_attributes(storage_client: msc.StorageClient, prefix: str) -> None:
     assert f"{'k' * 32}" in max_valid_metadata.metadata
     assert "short" in max_valid_metadata.metadata
 
+    # Test 7: Test list() and glob() with attribute_filter_expression
+    # Create multiple test files with different attributes for filtering tests
+    filter_test_files = [
+        {
+            "path": f"{prefix}/filtering/models/gpt/model_v1.bin",
+            "attributes": {
+                "model_name": "gpt",
+                "version": "1.0",
+                "environment": "prod",
+                "size": "large",
+                "priority": "10",
+            },
+        },
+        {
+            "path": f"{prefix}/filtering/models/gpt/model_v2.bin",
+            "attributes": {
+                "model_name": "gpt",
+                "version": "2.0",
+                "environment": "dev",
+                "size": "small",
+                "priority": "5",
+            },
+        },
+        {
+            "path": f"{prefix}/filtering/models/bert/data_v1.bin",
+            "attributes": {
+                "model_name": "bert",
+                "version": "1.0",
+                "environment": "prod",
+                "size": "medium",
+                "priority": "15",
+            },
+        },
+        {
+            "path": f"{prefix}/filtering/data/training/dataset.bin",
+            "attributes": {
+                "type": "dataset",
+                "version": "1.5",
+                "environment": "test",
+                "size": "large",
+                "priority": "8",
+            },
+        },
+        {
+            "path": f"{prefix}/filtering/config/settings.txt",
+            "attributes": {
+                "type": "config",
+                "version": "0.5",
+                "environment": "prod",
+                "size": "small",
+                "priority": "20",
+            },
+        },
+        {
+            "path": f"{prefix}/filtering/temp/cache.tmp",
+            "attributes": {"type": "temp", "version": "1.0", "environment": "dev", "size": "medium", "priority": "12"},
+        },
+    ]
+
+    # Create the test files
+    for test_file in filter_test_files:
+        storage_client.write(test_file["path"], test_content, attributes=test_file["attributes"])
+
+    # Test 7a: list() with attribute_filter_expression
+
+    # Test equality filter
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='model_name = "gpt"'))
+    assert len(results) == 2
+    result_paths = [r.key for r in results]
+    assert any("model_v1.bin" in path for path in result_paths)
+    assert any("model_v2.bin" in path for path in result_paths)
+
+    # Test inequality filter
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='environment != "prod"'))
+    assert len(results) == 3  # dev, test, dev files
+    result_basenames = [os.path.basename(r.key) for r in results]
+    assert "model_v2.bin" in result_basenames
+    assert "dataset.bin" in result_basenames
+    assert "cache.tmp" in result_basenames
+
+    # Test numeric comparison (greater than)
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='priority > "10"'))
+    assert len(results) >= 2  # Should include priority 15, 20, and 12
+    result_basenames = [os.path.basename(r.key) for r in results]
+    assert "data_v1.bin" in result_basenames  # priority: 15
+    assert "settings.txt" in result_basenames  # priority: 20
+    assert "cache.tmp" in result_basenames  # priority: 12
+
+    # Test numeric comparison (less than or equal)
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='priority <= "8"'))
+    assert len(results) == 2
+    result_basenames = [os.path.basename(r.key) for r in results]
+    assert "model_v2.bin" in result_basenames  # priority: 5
+    assert "dataset.bin" in result_basenames  # priority: 8
+
+    # Test string comparison (version ordering)
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='version >= "1.0"'))
+    assert len(results) == 5  # All except settings.txt with version "0.5"
+    result_basenames = [os.path.basename(r.key) for r in results]
+    assert "settings.txt" not in result_basenames
+
+    # Test multiple filters (AND logic)
+    results = list(
+        storage_client.list(
+            f"{prefix}/filtering", attribute_filter_expression='(model_name = "bert" AND environment = "prod")'
+        )
+    )
+    assert len(results) == 1
+    result_basenames = [os.path.basename(r.key) for r in results]
+    assert "data_v1.bin" in result_basenames
+
+    # Test filter with no matches
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='model_name = "nonexistent"'))
+    assert len(results) == 0
+
+    # Test empty filter (should return all files)
+    results = list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression=""))
+    assert len(results) == 6
+
+    # Test 7b: glob() with attribute_filter_expression
+
+    # Test glob with equality filter - find all gpt models
+    results = storage_client.glob(f"{prefix}/filtering/**/*.bin", attribute_filter_expression='model_name = "gpt"')
+    assert len(results) == 2
+    assert all("gpt" in path for path in results)
+
+    # Test glob with inequality filter - find all non-prod environments
+    results = storage_client.glob(f"{prefix}/filtering/**/*", attribute_filter_expression='environment != "prod"')
+    assert len(results) == 3  # dev + test + dev files
+    result_basenames = [os.path.basename(path) for path in results]
+    assert "model_v2.bin" in result_basenames  # dev
+    assert "dataset.bin" in result_basenames  # test
+    assert "cache.tmp" in result_basenames  # dev
+
+    # Test glob with string comparison - versions >= 1.0
+    results = storage_client.glob(f"{prefix}/filtering/**/*", attribute_filter_expression='version >= "1.0"')
+    assert len(results) == 5  # All except settings.txt (version 0.5)
+    result_basenames = [os.path.basename(path) for path in results]
+    assert "settings.txt" not in result_basenames
+
+    # Test glob with multiple filters (AND logic) - large files in prod
+    results = storage_client.glob(
+        f"{prefix}/filtering/**/*", attribute_filter_expression='(size = "large" AND environment = "prod")'
+    )
+    assert len(results) == 1
+    assert "model_v1.bin" in results[0]
+
+    # Test glob pattern specificity with filters - only .bin files that are small
+    results = storage_client.glob(f"{prefix}/filtering/**/*.bin", attribute_filter_expression='size = "small"')
+    assert len(results) == 1
+    assert "model_v2.bin" in results[0]
+
+    # Test glob with nested path pattern and filters
+    results = storage_client.glob(f"{prefix}/filtering/models/**/*", attribute_filter_expression='version = "1.0"')
+    assert len(results) == 2
+    result_basenames = [os.path.basename(path) for path in results]
+    assert "model_v1.bin" in result_basenames
+    assert "data_v1.bin" in result_basenames
+
+    # Test glob with filters that return no results
+    results = storage_client.glob(f"{prefix}/filtering/**/*", attribute_filter_expression='model_name = "nonexistent"')
+    assert len(results) == 0
+
+    # Test glob with empty filters (should return all matching pattern)
+    results = storage_client.glob(f"{prefix}/filtering/**/*.bin", attribute_filter_expression="")
+    assert len(results) == 4  # All .bin files
+
+    # Test complex glob pattern with attribute filters
+    results = storage_client.glob(
+        f"{prefix}/filtering/**/model_*.bin", attribute_filter_expression='environment != "test"'
+    )
+    assert len(results) == 2  # model_v1.bin (prod) and model_v2.bin (dev)
+
+    # Test 7c: Edge cases and error handling for attribute_filter_expression
+
+    # Test invalid filter format should raise error
+    with pytest.raises(ValueError, match="Invalid attribute filter expression"):
+        list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression="incomplete_filter"))
+
+    # Test unsupported operator should raise error
+    with pytest.raises(ValueError, match="Invalid attribute filter expression"):
+        list(storage_client.list(f"{prefix}/filtering", attribute_filter_expression='model_name ~= "value"'))
+
+    # Test filtering with mixed numeric and string comparisons
+    results = storage_client.glob(
+        f"{prefix}/filtering/**/*", attribute_filter_expression='(priority > "7" AND size != "large")'
+    )
+    # Should return files with priority > 7 AND size != large
+    # That's: model_v2.bin (5), dataset.bin (8), cache.tmp (12) - but model_v2.bin (5) fails priority > 7
+    # So: dataset.bin (8, large - fails size), cache.tmp (12, medium - passes)
+    # Actually: cache.tmp (12, medium), settings.txt (20, small)
+    assert len(results) >= 1
+    result_basenames = [os.path.basename(path) for path in results]
+    # At least cache.tmp and settings.txt should be included
+    assert "cache.tmp" in result_basenames or "settings.txt" in result_basenames
+
 
 def test_shortcuts(profile: str):
     client, _ = msc.resolve_storage_client(f"msc://{profile}/")

@@ -40,7 +40,10 @@ from ..types import (
     Range,
     RetryableError,
 )
-from ..utils import split_path, validate_attributes
+from ..utils import (
+    split_path,
+    validate_attributes,
+)
 from .base import BaseStorageProvider
 
 _T = TypeVar("_T")

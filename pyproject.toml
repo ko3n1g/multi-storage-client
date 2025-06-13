@@ -36,6 +36,7 @@ dependencies = [
     "xattr~=1.1.4",
     "wcmatch~=10.0",
     "tqdm~=4.27",
+    "lark~=1.2.2",
 ]
 
 [project.urls]

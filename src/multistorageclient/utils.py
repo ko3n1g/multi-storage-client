@@ -21,8 +21,9 @@ import re
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
+from lark import Lark, Transformer
 from wcmatch import glob as wcmatch_glob
 
 from .types import ObjectMetadata
@@ -294,6 +295,151 @@ def validate_attributes(attributes: Optional[dict[str, str]]) -> Optional[dict[s
             )
 
     return attributes
+
+
+# Grammar for attribute filter expressions
+ATTRIBUTE_FILTER_GRAMMAR = r"""
+    ?start: expr
+
+    ?expr: expr "OR" expr   -> or_expr
+         | expr "AND" expr  -> and_expr
+         | "(" expr ")"     -> parens
+         | comparison
+
+    ?comparison: CNAME OP value -> compare
+
+    OP: "=" | "!=" | ">" | ">=" | "<" | "<="
+
+    value: ESCAPED_STRING   -> string
+         | SIGNED_NUMBER    -> number
+
+    %import common.CNAME
+    %import common.ESCAPED_STRING
+    %import common.SIGNED_NUMBER
+    %import common.WS
+    %ignore WS
+"""
+
+
+class AttributeFilterEvaluator(Transformer):
+    """Evaluator for attribute filter expressions."""
+
+    def _compare_values(self, actual: str, operator: str, expected: str) -> bool:
+        """
+        Helper function to compare values based on operator.
+
+        For ordering operators (>, >=, <, <=), attempts numeric comparison first,
+        falls back to string comparison if conversion fails.
+        """
+        if operator == "=":
+            return actual == expected
+        elif operator == "!=":
+            return actual != expected
+        elif operator in [">", ">=", "<", "<="]:
+            # Try numeric comparison first for ordering operators
+            try:
+                actual_num = float(actual)
+                expected_num = float(expected)
+                if operator == ">":
+                    return actual_num > expected_num
+                elif operator == ">=":
+                    return actual_num >= expected_num
+                elif operator == "<":
+                    return actual_num < expected_num
+                elif operator == "<=":
+                    return actual_num <= expected_num
+            except ValueError:
+                # Fall back to lexicographic string comparison
+                if operator == ">":
+                    return actual > expected
+                elif operator == ">=":
+                    return actual >= expected
+                elif operator == "<":
+                    return actual < expected
+                elif operator == "<=":
+                    return actual <= expected
+        else:
+            raise ValueError(f"Unsupported operator: {operator}")
+
+        return False
+
+    def compare(self, items):
+        """Handle comparison expressions."""
+        key, op_token, val = items
+        key = str(key)
+        op = str(op_token)
+        return lambda metadata: (key in metadata and self._compare_values(str(metadata[key]), op, val))
+
+    def and_expr(self, items):
+        """Handle AND expressions."""
+        return lambda metadata: items[0](metadata) and items[1](metadata)
+
+    def or_expr(self, items):
+        """Handle OR expressions."""
+        return lambda metadata: items[0](metadata) or items[1](metadata)
+
+    def not_expr(self, items):
+        """Handle NOT expressions."""
+        return lambda metadata: not items[0](metadata)
+
+    def start(self, items):
+        """Start rule."""
+        return items[0]
+
+    def string(self, s):
+        """Handle string literals."""
+        return str(s[0])[1:-1]  # strip quotes
+
+    def number(self, n):
+        """Handle numeric literals."""
+        return float(n[0])
+
+    def parens(self, items):
+        """Handle parenthesized expressions."""
+        return items[0]
+
+
+# Global parser instance
+attribute_filter_parser = Lark(ATTRIBUTE_FILTER_GRAMMAR, parser="lalr", start="start")
+
+
+def create_attribute_filter_evaluator(attribute_filter_expression: str) -> Callable[[dict], bool]:
+    """
+    Create a evaluator for the given attribute filter expression.
+
+    :param attribute_filter_expression: Filter expression string
+                    Example: "model_name = my-test-model AND version != 0.5"
+    :return: A callable that takes metadata dict and returns bool
+    :raises ValueError: If the expression is invalid
+    """
+    if not attribute_filter_expression:
+        return lambda metadata: True
+
+    try:
+        # Parse the expression and create an evaluator
+        tree = attribute_filter_parser.parse(attribute_filter_expression)
+        return AttributeFilterEvaluator().transform(tree)
+    except Exception as e:
+        raise ValueError(f"Invalid attribute filter expression: {attribute_filter_expression}. Error: {str(e)}")
+
+
+def matches_attribute_filter_expression(
+    obj_metadata: ObjectMetadata, evaluator: Optional[Callable[[dict], bool]]
+) -> bool:
+    """
+    Check if an object's metadata matches the given attribute filter expression.
+
+    :param obj_metadata: The object metadata to check
+    :param evaluator: The evaluator function from create_attribute_filter_parser
+    :return: True if the expression evaluates to true, False otherwise
+    """
+    if not evaluator:
+        return True
+
+    if not obj_metadata.metadata:
+        return False
+
+    return evaluator(obj_metadata.metadata)
 
 
 # Null implementation of StorageClient, where any call to list returns an empty list,

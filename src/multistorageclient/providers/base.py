@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import importlib.metadata as importlib_metadata
+import logging
 import os
 import time
 from abc import abstractmethod
@@ -28,7 +29,15 @@ from ..instrumentation.utils import StorageProviderMetricsHelper, instrumented
 from ..telemetry import Telemetry
 from ..telemetry.attributes.base import AttributesProvider, collect_attributes
 from ..types import ObjectMetadata, Range, StorageProvider
-from ..utils import extract_prefix_from_glob, glob, insert_directories
+from ..utils import (
+    create_attribute_filter_evaluator,
+    extract_prefix_from_glob,
+    glob,
+    insert_directories,
+    matches_attribute_filter_expression,
+)
+
+logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
@@ -239,6 +248,7 @@ class BaseStorageProvider(StorageProvider):
         start_after: Optional[str] = None,
         end_at: Optional[str] = None,
         include_directories: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
         if (start_after is not None) and (end_at is not None) and not (start_after < end_at):
             raise ValueError(f"start_after ({start_after}) must be before end_at ({end_at})!")
@@ -248,12 +258,29 @@ class BaseStorageProvider(StorageProvider):
             operation=BaseStorageProvider._Operation.LIST,
             f=lambda: self._list_objects(prefix, start_after, end_at, include_directories),
         )
-        if self._base_path:
-            for object in objects:
-                object.key = object.key.removeprefix(self._base_path).lstrip("/")
-                yield object
-        else:
-            yield from objects
+
+        # Filter objects based on attribute filter expression
+        evaluator = (
+            create_attribute_filter_evaluator(attribute_filter_expression) if attribute_filter_expression else None
+        )
+        for obj in objects:
+            if self._base_path:
+                obj.key = obj.key.removeprefix(self._base_path).lstrip("/")
+
+            if attribute_filter_expression:
+                obj_metadata = None
+                try:
+                    obj_metadata = self.get_object_metadata(obj.key)
+                except Exception as e:
+                    logger.debug(
+                        f"While listing objects, failed to get object metadata for {obj.key}: {e}, skipping the object"
+                    )
+                if obj_metadata and matches_attribute_filter_expression(obj_metadata, evaluator):
+                    yield obj
+                else:
+                    continue
+            else:
+                yield obj
 
     def upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> None:
         remote_path = self._prepend_base_path(remote_path)
@@ -269,11 +296,22 @@ class BaseStorageProvider(StorageProvider):
             f=lambda: self._download_file(remote_path, f, metadata),
         )
 
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
         prefix = extract_prefix_from_glob(pattern)
         keys = [object.key for object in self.list_objects(prefix)]
         keys = insert_directories(keys)
-        return [key for key in glob(keys, pattern)]
+
+        matched_keys = [key for key in glob(keys, pattern)]
+        if attribute_filter_expression:
+            evaluator = create_attribute_filter_evaluator(attribute_filter_expression)
+            filtered_keys = []
+            for key in matched_keys:
+                obj_metadata = self.get_object_metadata(key)
+                if matches_attribute_filter_expression(obj_metadata, evaluator):
+                    filtered_keys.append(key)
+            return filtered_keys
+        else:
+            return matched_keys
 
     def is_file(self, path: str) -> bool:
         try:

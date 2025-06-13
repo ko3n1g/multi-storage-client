@@ -14,18 +14,23 @@
 # limitations under the License.
 
 import os
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
 
 import multistorageclient as msc
+from multistorageclient.types import ObjectMetadata
 from multistorageclient.utils import (
+    AttributeFilterEvaluator,
     calculate_worker_processes_and_threads,
+    create_attribute_filter_evaluator,
     expand_env_vars,
     extract_prefix_from_glob,
     glob,
     insert_directories,
     join_paths,
+    matches_attribute_filter_expression,
     merge_dictionaries_no_overwrite,
 )
 
@@ -281,3 +286,84 @@ def test_calculate_worker_processes_and_threads_both_custom(mock_cpu_count, monk
     processes, threads = calculate_worker_processes_and_threads()
     assert processes == 2  # Should use environment variable
     assert threads == 8  # Should use environment variable
+
+
+def test_attribute_filter_evaluator_comparison():
+    """Test basic comparison operations in AttributeFilterEvaluator."""
+    evaluator = AttributeFilterEvaluator()
+
+    # Test string comparison
+    assert evaluator._compare_values("test", "=", "test")
+    assert not evaluator._compare_values("test", "=", "other")
+    assert evaluator._compare_values("test", "!=", "other")
+    assert not evaluator._compare_values("test", "!=", "test")
+
+    # Test numeric comparison
+    assert evaluator._compare_values("1.5", ">", "1.0")
+    assert evaluator._compare_values("1.0", ">=", "1.0")
+    assert evaluator._compare_values("1.0", "<", "1.5")
+    assert evaluator._compare_values("1.0", "<=", "1.0")
+
+    # Test string fallback for numeric comparison
+    assert evaluator._compare_values("b", ">", "a")
+    assert evaluator._compare_values("a", "<", "b")
+
+    # Test invalid operator
+    with pytest.raises(ValueError):
+        evaluator._compare_values("test", "invalid", "test")
+
+
+def test_create_attribute_filter_evaluator():
+    """Test creation of attribute filter evaluators."""
+    # Test empty expression
+    evaluator = create_attribute_filter_evaluator("")
+    assert evaluator({"any": "value"})  # Empty expression always returns True
+
+    # Test simple comparison
+    evaluator = create_attribute_filter_evaluator('model_name = "gpt"')
+    assert evaluator({"model_name": "gpt"})
+    assert not evaluator({"model_name": "bert"})
+    assert not evaluator({})  # Missing key returns False
+
+    # Test complex expression
+    evaluator = create_attribute_filter_evaluator('(model_name = "gpt" OR model_name = "bert") AND version > 1.0')
+    assert evaluator({"model_name": "gpt", "version": "1.5"})
+    assert evaluator({"model_name": "bert", "version": "2.0"})
+    assert not evaluator({"model_name": "gpt", "version": "0.5"})
+    assert not evaluator({"model_name": "other", "version": "2.0"})
+
+    # Test invalid expression
+    with pytest.raises(ValueError):
+        create_attribute_filter_evaluator("invalid expression")
+
+
+def test_matches_attribute_filter_expression():
+    """Test matching objects against attribute filter expressions."""
+    # Create test metadata
+    metadata = ObjectMetadata(
+        key="test.txt",
+        content_length=100,
+        last_modified=datetime.now(),
+        metadata={"model_name": "gpt", "version": "1.5", "type": "text"},
+    )
+
+    # Test empty expression
+    evaluator = create_attribute_filter_evaluator("")
+    assert matches_attribute_filter_expression(metadata, evaluator)
+
+    # Test simple comparison
+    evaluator = create_attribute_filter_evaluator('model_name = "gpt"')
+    assert matches_attribute_filter_expression(metadata, evaluator)
+
+    # Test complex expression
+    evaluator = create_attribute_filter_evaluator('(model_name = "gpt" OR model_name = "bert") AND version > 1.0')
+    assert matches_attribute_filter_expression(metadata, evaluator)
+
+    # Test non-matching expression
+    evaluator = create_attribute_filter_evaluator('model_name = "bert"')
+    assert not matches_attribute_filter_expression(metadata, evaluator)
+
+    # Test empty metadata
+    empty_metadata = ObjectMetadata(key="test.txt", content_length=100, last_modified=datetime.now(), metadata={})
+    evaluator = create_attribute_filter_evaluator('model_name = "gpt"')
+    assert not matches_attribute_filter_expression(empty_metadata, evaluator)
