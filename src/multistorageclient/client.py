@@ -97,9 +97,9 @@ class StorageClient:
     @retry
     def read(self, path: str, byte_range: Optional[Range] = None) -> bytes:
         """
-        Reads an object from the storage provider at the specified path.
+        Reads an object from the specified logical path.
 
-        :param path: The path of the object to read.
+        :param path: The logical path of the object to read.
         :return: The content of the object.
         """
         if self._metadata_provider:
@@ -129,7 +129,7 @@ class StorageClient:
         """
         Retrieves metadata or information about an object stored at the specified path.
 
-        :param path: The path to the object for which metadata or information is being retrieved.
+        :param path: The logical path to the object for which metadata or information is being retrieved.
         :param strict: If True, performs additional validation to determine whether the path refers to a directory.
 
         :return: A dictionary containing metadata about the object.
@@ -158,9 +158,9 @@ class StorageClient:
     @retry
     def download_file(self, remote_path: str, local_path: str) -> None:
         """
-        Downloads a file from the storage provider to the local file system.
+        Downloads a file to the local file system.
 
-        :param remote_path: The path of the file in the storage provider.
+        :param remote_path: The logical path of the file in the storage provider.
         :param local_path: The local path where the file should be downloaded.
         """
 
@@ -176,9 +176,9 @@ class StorageClient:
     @retry
     def upload_file(self, remote_path: str, local_path: str, attributes: Optional[dict[str, str]] = None) -> None:
         """
-        Uploads a file from the local file system to the storage provider.
+        Uploads a file from the local file system.
 
-        :param remote_path: The path where the file should be stored in the storage provider.
+        :param remote_path: The logical path where the file should be stored.
         :param local_path: The local path of the file to upload.
         :param attributes: The attributes to add to the file.
         """
@@ -198,9 +198,9 @@ class StorageClient:
     @retry
     def write(self, path: str, body: bytes, attributes: Optional[dict[str, str]] = None) -> None:
         """
-        Writes an object to the storage provider at the specified path.
+        Writes an object at the specified path.
 
-        :param path: The path where the object should be written.
+        :param path: The logical path where the object should be written.
         :param body: The content to write to the object.
         :param attributes: The attributes to add to the file.
         """
@@ -220,10 +220,10 @@ class StorageClient:
 
     def copy(self, src_path: str, dest_path: str) -> None:
         """
-        Copies an object from source to destination in the storage provider.
+        Copies an object from source to destination path.
 
-        :param src_path: The virtual path of the source object to copy.
-        :param dest_path: The virtual path of the destination.
+        :param src_path: The logical path of the source object to copy.
+        :param dest_path: The logical path of the destination.
         """
         virtual_dest_path = dest_path
         if self._metadata_provider:
@@ -245,9 +245,9 @@ class StorageClient:
 
     def delete(self, path: str, recursive: bool = False) -> None:
         """
-        Deletes an object from the storage provider at the specified path.
+        Deletes an object at the specified path.
 
-        :param path: The virtual path of the object to delete.
+        :param path: The logical path of the object to delete.
         :param recursive: Whether to delete objects in the path recursively.
         """
         if recursive:
@@ -351,9 +351,9 @@ class StorageClient:
         attributes: Optional[dict[str, str]] = None,
     ) -> Union[PosixFile, ObjectFile]:
         """
-        Returns a file-like object from the storage provider at the specified path.
+        Returns a file-like object from the specified path.
 
-        :param path: The path of the object to read.
+        :param path: The logical path of the object to read.
         :param mode: The file mode, only "w", "r", "a", "wb", "rb" and "ab" are supported.
         :param buffering: The buffering mode. Only applies to PosixFile.
         :param encoding: The encoding to use for text files.
@@ -390,7 +390,7 @@ class StorageClient:
         """
         Checks whether the specified path points to a file (rather than a directory or folder).
 
-        :param path: The path to check.
+        :param path: The logical path to check.
 
         :return: ``True`` if the path points to a file, ``False`` otherwise.
         """
@@ -407,7 +407,7 @@ class StorageClient:
         """
         if self._metadata_provider:
             if prefix:
-                # The virtual path for each item will be the physical path with
+                # The logical path for each item will be the physical path with
                 # the base physical path removed from the beginning.
                 physical_base, _ = self._metadata_provider.realpath("")
                 physical_prefix, _ = self._metadata_provider.realpath(prefix)
@@ -421,7 +421,7 @@ class StorageClient:
         Checks whether the specified path is empty. A path is considered empty if there are no
         objects whose keys start with the given path as a prefix.
 
-        :param path: The path to check. This is typically a prefix representing a directory or folder.
+        :param path: The logical path to check. This is typically a prefix representing a directory or folder.
 
         :return: ``True`` if no objects exist under the specified path prefix, ``False`` otherwise.
         """
@@ -461,8 +461,8 @@ class StorageClient:
         Syncs files from the source storage client to "path/".
 
         :param source_client: The source storage client.
-        :param source_path: The path to sync from.
-        :param target_path: The path to sync to.
+        :param source_path: The logical path to sync from.
+        :param target_path: The logical path to sync to.
         :param delete_unmatched_files: Whether to delete files at the target that are not present at the source.
         :param description: Description of sync process for logging purposes.
         :param num_worker_processes: The number of worker processes to use.
