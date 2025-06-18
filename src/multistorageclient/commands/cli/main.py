@@ -18,7 +18,7 @@ import sys
 
 import multistorageclient as msc
 
-from .actions import ActionRegistry, HelpAction, MSCArgumentParser, SyncAction
+from .actions import ActionRegistry, GlobAction, HelpAction, LsAction, MSCArgumentParser, RmAction, SyncAction
 
 
 def create_parser() -> MSCArgumentParser:
@@ -50,6 +50,9 @@ def main() -> int:
     # Register commands with instances
     registry.register_action(HelpAction(registry))
     registry.register_action(SyncAction())
+    registry.register_action(GlobAction())
+    registry.register_action(LsAction())
+    registry.register_action(RmAction())
 
     # Parse command line arguments
     parser = create_parser()

@@ -14,7 +14,18 @@
 # limitations under the License.
 
 from .action import ActionRegistry, MSCArgumentParser
+from .glob import GlobAction
 from .help import HelpAction
+from .ls import LsAction
+from .rm import RmAction
 from .sync import SyncAction
 
-__all__ = ["ActionRegistry", "MSCArgumentParser", "HelpAction", "SyncAction"]
+__all__ = [
+    "ActionRegistry",
+    "MSCArgumentParser",
+    "HelpAction",
+    "SyncAction",
+    "GlobAction",
+    "LsAction",
+    "RmAction",
+]
