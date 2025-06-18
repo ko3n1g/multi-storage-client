@@ -461,6 +461,11 @@ def test_explicit_path_translation(file_storage_config_with_path_mapping):
     assert client.profile == "s3-bucket1-a-b"
     assert path == "prefix/file.txt"
 
+    # Test Case 6: S3 path translation with existing s3 url pointing to a different storage provider profile
+    client, path = msc.resolve_storage_client("s3://old-bucket-123/prefix/file.txt")
+    assert client.profile == "azure-new-bucket-456"
+    assert path == "prefix/file.txt"
+
 
 def test_implicit_profiles_without_msc_config():
     """Test the implicit profiles feature for non-MSC URLs."""

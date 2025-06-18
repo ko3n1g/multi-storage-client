@@ -73,11 +73,18 @@ profiles:
       type: s3
       options:
         base_path: bucket1/a/b
+  azure-new-bucket-456:
+    storage_provider:
+      type: azure
+      options:
+        base_path: new-bucket-456
+        endpoint_url: https://new-bucket-456.blob.core.windows.net
 path_mapping:
   /lustrefs/a/b/: msc://file-a-b/
   /lustrefs/a/: msc://file-a/
   s3://bucket1/: msc://s3-bucket1/
   s3://bucket1/a/b/: msc://s3-bucket1-a-b/
+  s3://old-bucket-123/: msc://azure-new-bucket-456/
 """
 
 

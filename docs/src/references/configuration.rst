@@ -709,10 +709,13 @@ This enables users to use their existing URLs with MSC without having to change 
      s3://bucket1/: msc://profile-for-s3-bucket1/
      s3://bucket1/a/b/: msc://profile-for-s3-bucket1-a-b/
      gs://bucket1/: msc://profile-for-gcs-bucket1/
+     s3://old-bucket-123/: msc://profile-for-gcs-new-bucket-456/  # pointing existing s3 urls to gcs profile with different bucket name
 
-Each key-value pair maps a source path to a destination MSC URL. The client
+Each key-value pair maps a source path to a destination MSC URL. MSC
 will automatically convert paths that match the source prefix to use the
-corresponding MSC URI when accessing files.
+corresponding MSC URI when accessing files.  The storage provider of the 
+specified destination profile doesn't need to match the type of the source 
+protocol, which allows users to point existing URLs to different storage providers.
 
 .. note::
    Path mapping must adhere to the following constraints:
@@ -720,7 +723,7 @@ corresponding MSC URI when accessing files.
    **Source Path:**
 
    * Must end with ``/`` to prevent unintended partial name conflicts and ensure clear mapping of prefixes
-   * Must use protocols supported by MSC (``s3``, ``gcs``, ``ais`` currently) or ``/`` for file paths
+   * The protocol can be anything as long as it points to a valid storage provider
    * No duplicate protocol + bucket + prefix combinations are allowed
 
    **Destination Path:**
@@ -746,7 +749,7 @@ This feature enables users to:
 
 When a non-MSC URL is provided to functions like :py:meth:`multistorageclient.open` or :py:meth:`multistorageclient.resolve_storage_client`, MSC will first check if there is an existing profile applicable through path mapping. If not, MSC will create an implicit profile:
 
-1. Infer the storage provider based on the URL scheme (s3, gs, etc.) and construct an implicit profile name with the convention ``_protocol-bucket`` (e.g., ``_s3-bucket1``, ``_gs-bucket1``) or ``_file`` for file system paths.
+1. Infer the storage provider based on the URL protocol (currently supported: ``s3``, ``gcs``, ``ais``, ``file``) and construct an implicit profile name with the convention ``_protocol-bucket`` (e.g., ``_s3-bucket1``, ``_gs-bucket1``) or ``_file`` for file system paths.  If the derived protocol is not supported, an exception will be thrown.
 2. Configure the storage provider and credential provider with default settings, i.e. credentials will the same as that native SDKs look for (aws credentials file, azure credentials file, etc.)
 3. If MSC config is present, inherit global settings like observability and file cache; otherwise, only default settings for file system based cache.
 

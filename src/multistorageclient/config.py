@@ -686,7 +686,8 @@ class PathMapping:
         # For file paths or absolute paths
         if protocol == "file" or url.startswith("/"):
             path = url if url.startswith("/") else pr.path
-            possible_mapping = self._mapping[protocol][""]
+
+            possible_mapping = self._mapping[protocol][""] if protocol in self._mapping else []
 
             # Check each prefix (already sorted by length, longest first)
             for prefix, profile in possible_mapping:
@@ -706,7 +707,9 @@ class PathMapping:
             path = path[1:]
 
         # Check bucket-specific mapping
-        possible_mapping = self._mapping[protocol][bucket]
+        possible_mapping = (
+            self._mapping[protocol][bucket] if (protocol in self._mapping and bucket in self._mapping[protocol]) else []
+        )
 
         # Check each prefix (already sorted by length, longest first)
         for prefix, profile in possible_mapping:
