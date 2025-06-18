@@ -120,6 +120,10 @@ Key:
 
 ## Tools
 
+Nix (required) and direnv (optional, but strongly recommended for shell + editor integration) are used for development.
+
+We rely on many tools which aren't vended as Python packages (e.g. storage emulators, compiler toolchains) but are available as Nix packages. While these can be installed individually, the toolset and exact versions will change over time. This is captured by the Nix shell described by the project's Nix flake.
+
 ### Nix
 
 [Nix](https://nixos.org) is a package manager and build system centered around reproducibility.
