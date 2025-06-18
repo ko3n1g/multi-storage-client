@@ -22,6 +22,7 @@ import threading
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+from pathlib import PurePosixPath
 from typing import Any, Optional, Union, cast
 
 from .config import StorageClientConfig
@@ -335,7 +336,10 @@ class StorageClient:
 
         for object in objects:
             if include_url_prefix:
-                object.key = join_paths(f"{MSC_PROTOCOL}{self._config.profile}", object.key)
+                if self.is_default_profile():
+                    object.key = str(PurePosixPath("/") / object.key)
+                else:
+                    object.key = join_paths(f"{MSC_PROTOCOL}{self._config.profile}", object.key)
             yield object
 
     def open(

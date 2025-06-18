@@ -155,6 +155,11 @@ def test_list(file_storage_config):
     assert len(results) == 1
     assert "testfile.bin" in results[0].key
 
+    # Test listing with POSXI file path
+    results = list(msc.list(tempdir))
+    assert len(results) == 1
+    assert "testfile.bin" in results[0].key and f"{MSC_PROTOCOL}default" not in results[0].key
+
 
 def test_write(file_storage_config):
     tempdir = tempfile.mkdtemp()
