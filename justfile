@@ -134,25 +134,27 @@ package: prepare-toolchain
     # Create a source distribution.
     uv build --sdist
     # Create platform-specific wheels.
+    #
     # Link Apple SDKs for cross-compilation, setup environment variables to correct wheel names.
+    #
     # https://github.com/rust-cross/cargo-zigbuild#caveats
     # https://github.com/PyO3/maturin/discussions/2586#discussioncomment-13095109
     # https://github.com/PyO3/maturin/blob/d95faa64f2c9971820314d228da9a7e71d2e4b87/src/build_context.rs#L1160
     for TARGET in {{compiler-targets}}; do \
-        if [ "$TARGET" = "aarch64-apple-darwin" ]; then \
-            MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_AARCH64; \
-            SDKROOT=$APPLE_SDK_AARCH64; \
-        elif [ "$TARGET" = "x86_64-apple-darwin" ]; then \
-            MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_X86_64; \
-            SDKROOT=$APPLE_SDK_X86_64; \
-        else \
-            MACOSX_DEPLOYMENT_TARGET=""; \
-            SDKROOT=""; \
-        fi; \
-        env --unset _PYTHON_HOST_PLATFORM \
-            MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
-            SDKROOT=$SDKROOT \
-            uv run maturin build --out dist --release --target $TARGET --zig; \
+        case "$TARGET" in \
+            (aarch64-apple-darwin) \
+                export MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_AARCH64 \
+                export SDKROOT=$APPLE_SDK_AARCH64 \
+                ;; \
+            (x86_64-apple-darwin) \
+                export MACOSX_DEPLOYMENT_TARGET=$APPLE_SDK_VERSION_X86_64 \
+                export SDKROOT=$APPLE_SDK_X86_64 \
+                ;; \
+            (*) \
+                unset MACOSX_DEPLOYMENT_TARGET \
+                unset SDKROOT \
+                ;; \
+        esac; env --unset _PYTHON_HOST_PLATFORM uv run maturin build --out dist --release --target $TARGET --zig; \
     done
 
 # Build the documentation.
