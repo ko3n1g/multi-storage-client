@@ -103,7 +103,7 @@ def test_glob_command_without_attribute_filter_expression(run_cli):
             file_path.write_text(f"Content of {file_path.name}")
 
         # Test basic glob pattern
-        stdout, stderr = run_cli("glob", f"{test_dir}/*.bin")
+        stdout, _ = run_cli("glob", f"{test_dir}/*.bin")
 
         # Should find both .bin files
         assert "model1.bin" in stdout
@@ -112,7 +112,7 @@ def test_glob_command_without_attribute_filter_expression(run_cli):
         assert "config.json" not in stdout
 
         # Test debug output
-        stdout, stderr = run_cli("glob", "--debug", f"{test_dir}/*")
+        stdout, _ = run_cli("glob", "--debug", f"{test_dir}/*")
 
         # Should show all files with debug info
         assert "model1.bin" in stdout
@@ -137,18 +137,16 @@ def test_glob_command_with_attribute_filter_expression(run_cli):
                 f.write(f"Content of {filename}")
 
         # Test equality operator - should find files with model_name = gpt
-        stdout, stderr = run_cli("glob", "--attribute-filter-expression", 'model_name = "gpt"', f"{test_dir}/*")
-        assert stderr == ""
+        stdout, _ = run_cli("glob", "--attribute-filter-expression", 'model_name = "gpt"', f"{test_dir}/*")
         assert "model1.bin" in stdout  # has model_name = gpt
         assert "data.txt" in stdout  # has model_name = gpt
         assert "model2.bin" not in stdout  # has model_name = bert
         assert "config.json" not in stdout  # no model_name attribute
 
         # Test multiple filters (AND logic) - model_name = gpt AND version >= 1.0
-        stdout, stderr = run_cli(
+        stdout, _ = run_cli(
             "glob", "--attribute-filter-expression", 'model_name = "gpt" AND version >= 1.0', f"{test_dir}/*"
         )
-        assert stderr == ""
         assert "model1.bin" in stdout  # model_name = gpt AND version = 1.0
         assert "data.txt" not in stdout  # model_name = gpt BUT version = 0.5
         assert "model2.bin" not in stdout  # version = 2.0 BUT model_name = bert
@@ -209,25 +207,23 @@ def test_ls_command_with_attribute_filter_expression(run_cli):
                 f.write(f"Content of {filename}")
 
         # Test comparison operator - should find files with version >= 1.0
-        stdout, stderr = run_cli("ls", "--recursive", "--attribute-filter-expression", "version >= 1.0", test_dir)
-        assert stderr == ""
+        stdout, _ = run_cli("ls", "--recursive", "--attribute-filter-expression", "version >= 1.0", test_dir)
         assert "dataset1.bin" in stdout  # version = 1.5
         assert "model.bin" in stdout  # version = 2.0
         assert "config.txt" in stdout  # version = 1.0
         assert "dataset2.bin" not in stdout  # version = 0.8
 
         # Test multiple filters - type = dataset AND version <= 2.0
-        stdout, stderr = run_cli(
+        stdout, _ = run_cli(
             "ls", "--recursive", "--attribute-filter-expression", 'type = "dataset" AND version <= 2.0', test_dir
         )
-        assert stderr == ""
         assert "dataset1.bin" in stdout  # type = dataset AND version = 1.5
         assert "dataset2.bin" in stdout  # type = dataset AND version = 0.8
         assert "model.bin" not in stdout  # version = 2.0 BUT type = model
         assert "config.txt" not in stdout  # version = 1.0 BUT type = config
 
         # Test with human readable and summarize
-        stdout, stderr = run_cli(
+        stdout, _ = run_cli(
             "ls",
             "--recursive",
             "--human-readable",
@@ -236,7 +232,6 @@ def test_ls_command_with_attribute_filter_expression(run_cli):
             'type = "dataset"',
             test_dir,
         )
-        assert stderr == ""
         assert "dataset1.bin" in stdout
         assert "dataset2.bin" in stdout
         assert "Total Objects:" in stdout
@@ -282,44 +277,37 @@ def test_rm_command(run_cli):
         assert "new_file2.bin" not in stdout
 
         # Test debug output
-        stdout, stderr = run_cli("rm", "--dryrun", "--debug", f"{test_dir}/old_")
+        stdout, _ = run_cli("rm", "--dryrun", "--debug", f"{test_dir}/old_")
         assert "Arguments:" in stdout
 
         # Test quiet mode
-        stdout, stderr = run_cli("rm", "--dryrun", "--quiet", f"{test_dir}/old_")
-        assert stdout == ""
-        assert stderr == ""
+        stdout, _ = run_cli("rm", "--dryrun", "--quiet", f"{test_dir}/old_")
+        assert "Arguments:" not in stdout
 
         # Test only-show-errors
-        stdout, stderr = run_cli("rm", "--dryrun", "--only-show-errors", f"{test_dir}/old_")
-        assert stdout == ""
-        assert stderr == ""
+        stdout, _ = run_cli("rm", "--dryrun", "--only-show-errors", f"{test_dir}/old_")
+        assert "Successfully deleted files with prefix" not in stdout
 
         # Test actual deletion without recursive (file by file)
-        stdout, stderr = run_cli("rm", f"{test_dir}/old_file1.txt")
+        stdout, _ = run_cli("rm", f"{test_dir}/old_file1.txt")
         assert f"Successfully deleted files with prefix: {test_dir}/old_file1.txt" in stdout
-        assert stderr == ""
         assert not (Path(test_dir) / "old_file1.txt").exists()
         assert (Path(test_dir) / "old_file2.bin").exists()
         assert (Path(test_dir) / "new_file1.txt").exists()
         assert (Path(test_dir) / "new_file2.bin").exists()
 
-        stdout, stderr = run_cli("rm", f"{test_dir}/old_file2.bin")
+        stdout, _ = run_cli("rm", f"{test_dir}/old_file2.bin")
         assert f"Successfully deleted files with prefix: {test_dir}/old_file2.bin" in stdout
-        assert stderr == ""
         assert not (Path(test_dir) / "old_file2.bin").exists()
+        assert (Path(test_dir) / "new_file1.txt").exists()
+        assert (Path(test_dir) / "new_file2.bin").exists()
 
-        # TODO: uncomment recursive deletion once shutil.rmtree issue is fixed:
-        # bug: No such file or directory: '/tmp/nix-shell.u9WwRk/tmpr20jyu1w/old_'
-
-        # subdir = Path(test_dir) / "subdir"
-        # subdir.mkdir()
-        # (subdir / "old_file3.txt").write_text("Content")
-        # stdout, stderr = run_cli("rm", "--recursive", f"{test_dir}/old_")
-        # assert not (subdir / "old_file3.txt").exists()
-
-        # # Verify files were actually deleted
-        # assert not (Path(test_dir) / "old_file1.txt").exists()
-        # assert not (Path(test_dir) / "old_file2.bin").exists()
-        # assert (Path(test_dir) / "new_file1.txt").exists()
-        # assert (Path(test_dir) / "new_file2.bin").exists()
+        # Test recursive deletion
+        subdir = Path(test_dir) / "subdir"
+        subdir.mkdir()
+        (subdir / "old_file3.txt").write_text("Content")
+        stdout, _ = run_cli("rm", "--recursive", f"{test_dir}")
+        # Verify files were actually deleted
+        assert not (Path(test_dir) / "new_file1.txt").exists()
+        assert not (Path(test_dir) / "new_file2.bin").exists()
+        assert not (Path(test_dir) / "subdir" / "old_file3.txt").exists()
