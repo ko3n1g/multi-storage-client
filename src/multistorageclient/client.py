@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import atexit
+import contextlib
 import logging
 import multiprocessing
 import os
@@ -51,6 +53,8 @@ class StorageClient:
     """
 
     _config: StorageClientConfig
+    _metadata_provider_lock: Optional[threading.Lock] = None
+    _stop_event: Optional[threading.Event] = None
 
     def __init__(self, config: StorageClientConfig):
         """
@@ -60,6 +64,21 @@ class StorageClient:
         """
         self._initialize_providers(config)
 
+    def _committer_thread(self, commit_interval_minutes: float, stop_event: threading.Event):
+        if not stop_event:
+            raise RuntimeError("Stop event not set")
+
+        while not stop_event.is_set():
+            # Wait with the ability to exit early
+            if stop_event.wait(timeout=commit_interval_minutes * 60):
+                break
+            logger.debug("Auto-committing to metadata provider")
+            self.commit_metadata()
+
+    def _commit_on_exit(self):
+        logger.debug("Shutting down, committing metadata one last time...")
+        self.commit_metadata()
+
     def _initialize_providers(self, config: StorageClientConfig) -> None:
         self._config = config
         self._credentials_provider = self._config.credentials_provider
@@ -68,6 +87,31 @@ class StorageClient:
         self._cache_config = self._config.cache_config
         self._retry_config = self._config.retry_config
         self._cache_manager = self._config.cache_manager
+        self._autocommit_config = self._config.autocommit_config
+
+        if self._autocommit_config:
+            if self._metadata_provider:
+                logger.debug("Creating auto-commiter thread")
+
+                if self._autocommit_config.interval_minutes:
+                    self._stop_event = threading.Event()
+                    self._commit_thread = threading.Thread(
+                        target=self._committer_thread,
+                        daemon=True,
+                        args=(self._autocommit_config.interval_minutes, self._stop_event),
+                    )
+                    self._commit_thread.start()
+
+                if self._autocommit_config.at_exit:
+                    atexit.register(self._commit_on_exit)
+
+                self._metadata_provider_lock = threading.Lock()
+            else:
+                logger.debug("No metadata provider configured, auto-commit will not be enabled")
+
+    def __del__(self):
+        if self._stop_event:
+            self._stop_event.set()
 
     def _get_source_version(self, path: str) -> Optional[str]:
         """
@@ -217,7 +261,8 @@ class StorageClient:
         if self._metadata_provider:
             # TODO(NGCDP-3016): Handle eventual consistency of Swiftstack, without wait.
             metadata = self._storage_provider.get_object_metadata(path)
-            self._metadata_provider.add_file(virtual_path, metadata)
+            with self._metadata_provider_lock or contextlib.nullcontext():
+                self._metadata_provider.add_file(virtual_path, metadata)
 
     def copy(self, src_path: str, dest_path: str) -> None:
         """
@@ -242,7 +287,8 @@ class StorageClient:
         self._storage_provider.copy_object(src_path, dest_path)
         if self._metadata_provider:
             metadata = self._storage_provider.get_object_metadata(dest_path)
-            self._metadata_provider.add_file(virtual_dest_path, metadata)
+            with self._metadata_provider_lock or contextlib.nullcontext():
+                self._metadata_provider.add_file(virtual_dest_path, metadata)
 
     def delete(self, path: str, recursive: bool = False) -> None:
         """
@@ -271,7 +317,8 @@ class StorageClient:
             path, exists = self._metadata_provider.realpath(path)
             if not exists:
                 raise FileNotFoundError(f"The file at path '{virtual_path}' was not found.")
-            self._metadata_provider.remove_file(virtual_path)
+            with self._metadata_provider_lock or contextlib.nullcontext():
+                self._metadata_provider.remove_file(virtual_path)
 
         # Delete the cached file if it exists
         if self._is_cache_enabled():
@@ -410,15 +457,16 @@ class StorageClient:
         :param prefix: If provided, scans the prefix to find files to commit.
         """
         if self._metadata_provider:
-            if prefix:
-                # The logical path for each item will be the physical path with
-                # the base physical path removed from the beginning.
-                physical_base, _ = self._metadata_provider.realpath("")
-                physical_prefix, _ = self._metadata_provider.realpath(prefix)
-                for obj in self._storage_provider.list_objects(prefix=physical_prefix):
-                    virtual_path = obj.key[len(physical_base) :].lstrip("/")
-                    self._metadata_provider.add_file(virtual_path, obj)
-            self._metadata_provider.commit_updates()
+            with self._metadata_provider_lock or contextlib.nullcontext():
+                if prefix:
+                    # The logical path for each item will be the physical path with
+                    # the base physical path removed from the beginning.
+                    physical_base, _ = self._metadata_provider.realpath("")
+                    physical_prefix, _ = self._metadata_provider.realpath(prefix)
+                    for obj in self._storage_provider.list_objects(prefix=physical_prefix):
+                        virtual_path = obj.key[len(physical_base) :].lstrip("/")
+                        self._metadata_provider.add_file(virtual_path, obj)
+                self._metadata_provider.commit_updates()
 
     def is_empty(self, path: str) -> bool:
         """
@@ -446,11 +494,15 @@ class StorageClient:
         del state["_storage_provider"]
         del state["_metadata_provider"]
         del state["_cache_manager"]
+        if "_metadata_provider_lock" in state:
+            del state["_metadata_provider_lock"]
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         config = state["_config"]
         self._initialize_providers(config)
+        if self._metadata_provider:
+            self._metadata_provider_lock = threading.Lock()
 
     def sync_from(
         self,
@@ -565,16 +617,17 @@ class StorageClient:
                     break
 
                 if self._metadata_provider:
-                    if op == _SyncOp.ADD:
-                        # Use realpath() to get physical path so metadata provider can
-                        # track the logical/physical mapping.
-                        phys_path, _ = self._metadata_provider.realpath(target_file_path)
-                        physical_metadata.key = phys_path
-                        self._metadata_provider.add_file(target_file_path, physical_metadata)
-                    elif op == _SyncOp.DELETE:
-                        self._metadata_provider.remove_file(target_file_path)
-                    else:
-                        raise RuntimeError(f"Unknown operation: {op}")
+                    with self._metadata_provider_lock or contextlib.nullcontext():
+                        if op == _SyncOp.ADD:
+                            # Use realpath() to get physical path so metadata provider can
+                            # track the logical/physical mapping.
+                            phys_path, _ = self._metadata_provider.realpath(target_file_path)
+                            physical_metadata.key = phys_path
+                            self._metadata_provider.add_file(target_file_path, physical_metadata)
+                        elif op == _SyncOp.DELETE:
+                            self._metadata_provider.remove_file(target_file_path)
+                        else:
+                            raise RuntimeError(f"Unknown operation: {op}")
                 progress.update_progress()
 
         result_consumer_thread = threading.Thread(target=_result_consumer, daemon=True)

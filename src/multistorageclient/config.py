@@ -38,6 +38,7 @@ from .types import (
     DEFAULT_RETRY_ATTEMPTS,
     DEFAULT_RETRY_DELAY,
     MSC_PROTOCOL,
+    AutoCommitConfig,
     CredentialsProvider,
     MetadataProvider,
     ProviderBundle,
@@ -569,6 +570,14 @@ class StorageClientConfigLoader:
         else:
             retry_config = RetryConfig(attempts=DEFAULT_RETRY_ATTEMPTS, delay=DEFAULT_RETRY_DELAY)
 
+        # autocommit options
+        autocommit_config = AutoCommitConfig()
+        autocommit_dict = self._profile_dict.get("autocommit", None)
+        if autocommit_dict:
+            interval_minutes = autocommit_dict.get("interval_minutes", None)
+            at_exit = autocommit_dict.get("at_exit", False)
+            autocommit_config = AutoCommitConfig(interval_minutes=interval_minutes, at_exit=at_exit)
+
         # set up OpenTelemetry providers once per process
         #
         # TODO: Legacy, need to remove.
@@ -586,6 +595,7 @@ class StorageClientConfigLoader:
             metric_gauges=self._metric_gauges,
             metric_counters=self._metric_counters,
             metric_attributes_providers=self._metric_attributes_providers,
+            autocommit_config=autocommit_config,
         )
 
 
@@ -740,6 +750,7 @@ class StorageClientConfig:
     metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]]
     metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]]
     metric_attributes_providers: Optional[Sequence[AttributesProvider]]
+    autocommit_config: Optional[AutoCommitConfig]
 
     _config_dict: Optional[dict[str, Any]]
 
@@ -755,6 +766,7 @@ class StorageClientConfig:
         metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]] = None,
         metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]] = None,
         metric_attributes_providers: Optional[Sequence[AttributesProvider]] = None,
+        autocommit_config: Optional[AutoCommitConfig] = None,
     ):
         self.profile = profile
         self.storage_provider = storage_provider
@@ -766,6 +778,7 @@ class StorageClientConfig:
         self.metric_gauges = metric_gauges
         self.metric_counters = metric_counters
         self.metric_attributes_providers = metric_attributes_providers
+        self.autocommit_config = autocommit_config
 
     @staticmethod
     def from_json(
@@ -966,3 +979,4 @@ class StorageClientConfig:
         self.metric_counters = new_config.metric_counters
         self.metric_attributes_providers = new_config.metric_attributes_providers
         self._config_dict = config_dict
+        self.autocommit_config = new_config.autocommit_config

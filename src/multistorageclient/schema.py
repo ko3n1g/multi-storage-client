@@ -104,6 +104,7 @@ CACHE_SCHEMA = {
     "additionalProperties": False,
 }
 
+
 PROFILE_SCHEMA = {
     "type": "object",
     "additionalProperties": {
@@ -130,6 +131,14 @@ PROFILE_SCHEMA = {
             "credentials_provider": EXTENSION_SCHEMA,
             "metadata_provider": EXTENSION_SCHEMA,
             "provider_bundle": EXTENSION_SCHEMA,
+            "autocommit": {
+                "type": "object",
+                "properties": {
+                    "interval_minutes": {"type": "number", "minimum": 0},
+                    "at_exit": {"type": "boolean"},
+                },
+                "additionalProperties": False,
+            },
             "comment": {"type": "string"},
         },
         "oneOf": [

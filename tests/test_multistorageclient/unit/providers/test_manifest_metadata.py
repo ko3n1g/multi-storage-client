@@ -16,6 +16,7 @@
 import copy
 import os
 import tempfile
+import time
 
 import pytest
 
@@ -258,3 +259,53 @@ def test_nonexistent_and_read_only():
         # Attempt a delete.
         with pytest.raises(RuntimeError):
             data_with_read_only_manifest_storage_client.delete(path=file_path)
+
+
+@pytest.mark.parametrize(
+    argnames="temp_data_store_type",
+    argvalues=[
+        tempdatastore.TemporaryAWSS3Bucket,
+    ],
+)
+def test_autocommit(temp_data_store_type: type[tempdatastore.TemporaryDataStore]):
+    with temp_data_store_type() as temp_data_store:
+        manifest_profile = "manifest"
+
+        storage_client = StorageClient(
+            config=StorageClientConfig.from_dict(
+                config_dict={
+                    "profiles": {
+                        manifest_profile: {
+                            **temp_data_store.profile_config_dict(),
+                            "metadata_provider": {
+                                "type": "manifest",
+                                "options": {
+                                    "manifest_path": DEFAULT_MANIFEST_BASE_DIR,
+                                    "writable": True,
+                                },
+                            },
+                            "autocommit": {
+                                "interval_minutes": 0.05,  # 0.05 minutes = 3 seconds
+                                "at_exit": False,
+                            },
+                        }
+                    }
+                },
+                profile=manifest_profile,
+            )
+        )
+
+        file_count = 10
+        for i in range(file_count):
+            fname = f"folder/filename-{i}.txt"
+            if not storage_client.is_file(fname):
+                storage_client.write(fname, f"contents for {i}")
+
+        # Wait 3 seconds for the autocommit to commit the files.
+        time.sleep(5)
+
+        assert len(list(storage_client.list(prefix="folder/"))) == file_count
+        for i in range(file_count):
+            fname = f"folder/filename-{i}.txt"
+            assert storage_client.is_file(fname)
+            assert storage_client.open(fname, mode="r").read() == f"contents for {i}"

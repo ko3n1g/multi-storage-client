@@ -492,3 +492,16 @@ class SourceVersionCheckMode(Enum):
     INHERIT = "inherit"  # Inherit from configuration (cache config)
     ENABLE = "enable"  # Always check source version
     DISABLE = "disable"  # Never check source version
+
+
+class AutoCommitConfig:
+    """
+    A data class that represents the configuration for auto commit.
+    """
+
+    interval_minutes: Optional[float]  # The interval in minutes for auto commit.
+    at_exit: bool = False  # if True, commit on program exit
+
+    def __init__(self, interval_minutes: Optional[float] = None, at_exit: bool = False) -> None:
+        self.interval_minutes = interval_minutes
+        self.at_exit = at_exit
