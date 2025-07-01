@@ -70,7 +70,7 @@ google-cloud-storage = [
     "google-cloud-storage~=3.0"
 ]
 oci = [
-    "oci~=2.69.0"
+    "oci~=2.150.0"
 ]
 
 # Higher-level libraries.
