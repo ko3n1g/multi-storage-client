@@ -344,7 +344,7 @@ class StorageClient:
         :return: A list of object paths that match the pattern.
         """
         if self._metadata_provider:
-            results = self._metadata_provider.glob(pattern)
+            results = self._metadata_provider.glob(pattern, attribute_filter_expression)
         else:
             results = self._storage_provider.glob(pattern, attribute_filter_expression)
 
@@ -375,7 +375,9 @@ class StorageClient:
         :return: An iterator over objects.
         """
         if self._metadata_provider:
-            objects = self._metadata_provider.list_objects(prefix, start_after, end_at, include_directories)
+            objects = self._metadata_provider.list_objects(
+                prefix, start_after, end_at, include_directories, attribute_filter_expression
+            )
         else:
             objects = self._storage_provider.list_objects(
                 prefix, start_after, end_at, include_directories, attribute_filter_expression

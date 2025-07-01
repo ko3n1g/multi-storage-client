@@ -283,7 +283,11 @@ class ManifestMetadataProvider(MetadataProvider):
         start_after: Optional[str] = None,
         end_at: Optional[str] = None,
         include_directories: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
+        if attribute_filter_expression:
+            raise NotImplementedError("Attribute filter expressions are not supported for manifest metadata provider.")
+
         if (start_after is not None) and (end_at is not None) and not (start_after < end_at):
             raise ValueError(f"start_after ({start_after}) must be before end_at ({end_at})!")
 
@@ -343,7 +347,10 @@ class ManifestMetadataProvider(MetadataProvider):
         else:
             raise FileNotFoundError(f"Object {path} does not exist.")
 
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
+        if attribute_filter_expression:
+            raise NotImplementedError("Attribute filter expressions are not supported for manifest metadata provider.")
+
         all_objects = [object.key for object in self.list_objects("")]
         return [key for key in glob(all_objects, pattern)]
 

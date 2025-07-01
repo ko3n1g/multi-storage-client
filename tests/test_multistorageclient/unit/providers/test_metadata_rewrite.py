@@ -40,6 +40,7 @@ class UuidMetadataProvider(MetadataProvider):
         start_after: Optional[str] = None,
         end_at: Optional[str] = None,
         include_directories: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
         assert not include_directories
         sorted_paths = sorted(self._path_to_uuid.keys())
@@ -60,7 +61,7 @@ class UuidMetadataProvider(MetadataProvider):
             raise FileNotFoundError(f"Object {path} does not exist.")
         return self._uuid_to_info[u]
 
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
         return [path for path in self._path_to_uuid.keys() if fnmatch.fnmatch(path, pattern)]
 
     def realpath(self, path: str) -> tuple[str, bool]:

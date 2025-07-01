@@ -67,6 +67,7 @@ class TestMetadataProvider(MetadataProvider):
         start_after: Optional[str] = None,
         end_at: Optional[str] = None,
         include_directories: bool = False,
+        attribute_filter_expression: Optional[str] = None,
     ) -> Iterator[ObjectMetadata]:
         assert not include_directories, "Directories are not supported in the test metadata provider"
         return iter(
@@ -81,7 +82,7 @@ class TestMetadataProvider(MetadataProvider):
         assert not include_pending, "Not supported in tests"
         return ObjectMetadata(key=path, content_length=19283, last_modified=datetime.now(tz=timezone.utc))
 
-    def glob(self, pattern: str) -> list[str]:
+    def glob(self, pattern: str, attribute_filter_expression: Optional[str] = None) -> list[str]:
         return glob_util(list(self._files.keys()), pattern)
 
     def realpath(self, path: str) -> tuple[str, bool]:
