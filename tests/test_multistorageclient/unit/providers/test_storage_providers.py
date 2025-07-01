@@ -64,11 +64,9 @@ def test_storage_providers(temp_data_store_type: type[tempdatastore.TemporaryDat
             config_dict["cache"] = {
                 "size": "10M",
                 "use_etag": True,
+                "location": tempfile.mkdtemp(),
                 "eviction_policy": {
                     "policy": "random",
-                },
-                "cache_backend": {
-                    "cache_path": tempfile.mkdtemp(),
                 },
             }
 

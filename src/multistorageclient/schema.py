@@ -88,17 +88,14 @@ CACHE_SCHEMA = {
                 "policy": {
                     "type": "string",
                     "enum": ["lru", "fifo", "random", "no_eviction", "LRU", "FIFO", "RANDOM", "NO_EVICTION"],
+                    "default": "lru",
                 },
                 "refresh_interval": {"type": "integer", "minimum": 300},
             },
-            "required": ["policy"],
         },
         "cache_backend": {  # Optional: If not specified, default cache backend will be used
             "type": "object",
-            "properties": {
-                "cache_path": {"type": "string"},
-                "storage_provider_profile": {"type": "string"},
-            },
+            "properties": {"cache_path": {"type": "string"}},
         },
     },
     "additionalProperties": False,

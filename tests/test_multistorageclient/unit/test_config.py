@@ -801,28 +801,12 @@ def test_invalid_cache_config():
         "cache": {
             "size": "invalid",  # Invalid size format
             "use_etag": True,
+            "location": "/tmp/msc_cache",
             "eviction_policy": {"policy": "lru", "refresh_interval": 300},
-            "cache_backend": {"cache_path": "/tmp/msc_cache"},
         },
     }
 
     with pytest.raises(RuntimeError, match="Failed to validate the config file"):
-        StorageClientConfig.from_dict(config_dict, "test")
-
-    # Test missing required profile
-    config_dict = {
-        "profiles": {"test": {"storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}}}},
-        "cache": {
-            "size": "200G",
-            "use_etag": True,
-            "eviction_policy": {"policy": "lru", "refresh_interval": 300},
-            "cache_backend": {"cache_path": "/tmp/msc_cache", "storage_provider_profile": "non-existent-profile"},
-        },
-    }
-
-    with pytest.raises(
-        ValueError, match="Profile 'non-existent-profile' referenced by storage_provider_profile does not exist"
-    ):
         StorageClientConfig.from_dict(config_dict, "test")
 
     # Relative location is not allowed
@@ -961,3 +945,81 @@ def test_s3_storage_provider_with_rust_client() -> None:
     assert isinstance(config.storage_provider, S3StorageProvider)
     storage_provider = cast(S3StorageProvider, config.storage_provider)
     assert storage_provider._rust_client is not None
+
+
+def test_cache_backend_cache_path():
+    """Test that cache_backend.cache_path is used as cache location when location is not defined."""
+    config_dict = {
+        "profiles": {
+            "test": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}},
+            }
+        },
+        "cache": {"size": "100M", "cache_backend": {"cache_path": "/tmp/new_cache_path"}},
+    }
+
+    config = StorageClientConfig.from_dict(config_dict, "test")
+    assert config.cache_config is not None
+    assert config.cache_config.location == "/tmp/new_cache_path"
+
+
+def test_cache_backend_cache_path_without_location():
+    """Test that cache_backend.cache_path works even when location is not specified."""
+    config_dict = {
+        "profiles": {
+            "test": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}},
+            }
+        },
+        "cache": {"size": "100M", "cache_backend": {"cache_path": "/tmp/cache_from_backend"}},
+    }
+
+    config = StorageClientConfig.from_dict(config_dict, "test")
+    assert config.cache_config is not None
+    assert config.cache_config.location == "/tmp/cache_from_backend"
+
+
+def test_cache_location_precedence():
+    """Test that location takes precedence over cache_backend.cache_path when both are defined."""
+    config_dict = {
+        "profiles": {
+            "test": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}},
+            }
+        },
+        "cache": {
+            "size": "100M",
+            "location": "/tmp/location_path",
+            "cache_backend": {"cache_path": "/tmp/backend_path"},
+        },
+    }
+
+    config = StorageClientConfig.from_dict(config_dict, "test")
+    assert config.cache_config is not None
+    # location should take precedence over cache_backend.cache_path
+    assert config.cache_config.location == "/tmp/location_path"
+
+
+def test_cache_location_warning(caplog):
+    """Test that a warning is logged when both location and cache_backend.cache_path are defined."""
+    config_dict = {
+        "profiles": {
+            "test": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/test_storage"}},
+            }
+        },
+        "cache": {
+            "size": "100M",
+            "location": "/tmp/location_path",
+            "cache_backend": {"cache_path": "/tmp/backend_path"},
+        },
+    }
+
+    config = StorageClientConfig.from_dict(config_dict, "test")
+    assert config.cache_config is not None
+    assert config.cache_config.location == "/tmp/location_path"
+
+    # Check that warning was logged
+    warning_messages = [record.message for record in caplog.records if record.levelname == "WARNING"]
+    assert len(warning_messages) > 0
+    assert any("Both 'location' and 'cache_backend.cache_path' are defined" in msg for msg in warning_messages)

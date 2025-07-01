@@ -26,8 +26,8 @@ from urllib.parse import urlparse
 import opentelemetry.metrics as api_metrics
 import yaml
 
-from .cache import DEFAULT_CACHE_SIZE, CacheBackendFactory, CacheManager
-from .caching.cache_config import CacheBackendConfig, CacheConfig, EvictionPolicyConfig
+from .cache import DEFAULT_CACHE_SIZE, CacheManager
+from .caching.cache_config import CacheConfig, EvictionPolicyConfig
 from .instrumentation import setup_opentelemetry
 from .providers.manifest_metadata import ManifestMetadataProvider
 from .rclone import read_rclone_config
@@ -169,7 +169,7 @@ DEFAULT_MSC_CONFIG_FILE_SEARCH_PATHS = _find_config_file_paths()
 
 PACKAGE_NAME = "multistorageclient"
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SimpleProviderBundle(ProviderBundle):
@@ -476,26 +476,6 @@ class StorageClientConfigLoader:
 
         return self._build_provider_bundle_from_config(self._profile_dict)
 
-    def _build_cache_manager(self, cache_config: CacheConfig) -> CacheManager:
-        cache_storage_provider = None
-
-        # Use the storage provider profile from cache config if specified
-        if cache_config.backend and cache_config.backend.storage_provider_profile:
-            cache_profile = cache_config.backend.storage_provider_profile
-            if cache_profile == self._profile:
-                logger.warning(
-                    f"Same profile used for cache backend and storage provider: {cache_profile}. "
-                    "This is not recommended as it may lead to unintended modifications of the source data. "
-                    "Consider using a separate read-only profile for the cache backend."
-                )
-
-            cache_storage_provider = self._build_storage_provider_from_profile(cache_profile)
-
-        cache_manager = CacheBackendFactory.create(
-            profile=self._profile, cache_config=cache_config, storage_provider=cache_storage_provider
-        )
-        return cache_manager
-
     def _verify_cache_config(self, cache_dict: dict[str, Any]) -> None:
         if "size_mb" in cache_dict:
             raise ValueError(
@@ -527,6 +507,20 @@ class StorageClientConfigLoader:
             default_location = os.path.join(tempdir, "msc_cache")
             location = self._cache_dict.get("location", default_location)
 
+            # Check if cache_backend.cache_path is defined
+            cache_backend = self._cache_dict.get("cache_backend", {})
+            cache_backend_path = cache_backend.get("cache_path") if cache_backend else None
+
+            # Warn if both location and cache_backend.cache_path are defined
+            if cache_backend_path and self._cache_dict.get("location") is not None:
+                logger.warning(
+                    f"Both 'location' and 'cache_backend.cache_path' are defined in cache config. "
+                    f"Using 'location' ({location}) and ignoring 'cache_backend.cache_path' ({cache_backend_path})."
+                )
+            elif cache_backend_path:
+                # Use cache_backend.cache_path only if location is not explicitly defined
+                location = cache_backend_path
+
             if not Path(location).is_absolute():
                 raise ValueError(f"Cache location must be an absolute path: {location}")
 
@@ -551,15 +545,12 @@ class StorageClientConfigLoader:
             # Create cache config from the standardized format
             cache_config = CacheConfig(
                 size=cache_dict.get("size", DEFAULT_CACHE_SIZE),
+                location=cache_dict.get("location", location),
                 use_etag=cache_dict.get("use_etag", True),
                 eviction_policy=eviction_policy,
-                backend=CacheBackendConfig(
-                    cache_path=cache_dict.get("cache_backend", {}).get("cache_path", location),
-                    storage_provider_profile=cache_dict.get("cache_backend", {}).get("storage_provider_profile"),
-                ),
             )
 
-            cache_manager = self._build_cache_manager(cache_config)
+            cache_manager = CacheManager(profile=self._profile, cache_config=cache_config)
 
         # retry options
         retry_config_dict = self._profile_dict.get("retry", None)

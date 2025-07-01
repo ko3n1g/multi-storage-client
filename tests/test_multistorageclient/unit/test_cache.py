@@ -23,18 +23,12 @@ from unittest.mock import MagicMock
 import pytest
 
 import test_multistorageclient.unit.utils.tempdatastore as tempdatastore
-from multistorageclient.cache import DEFAULT_CACHE_REFRESH_INTERVAL, CacheBackendFactory
-from multistorageclient.caching.cache_backend import FileSystemBackend
+from multistorageclient.cache import DEFAULT_CACHE_REFRESH_INTERVAL, CacheManager
 from multistorageclient.caching.cache_config import (
-    CacheBackendConfig,
     CacheConfig,
     EvictionPolicyConfig,
 )
 from multistorageclient.config import StorageClientConfig
-from multistorageclient.providers import (
-    S3StorageProvider,
-    S8KStorageProvider,
-)
 
 
 @pytest.fixture
@@ -45,25 +39,25 @@ def profile_name():
 @pytest.fixture
 def cache_config(tmpdir):
     """Fixture for CacheConfig object."""
-    return CacheConfig(size="10M", use_etag=False, backend=CacheBackendConfig(cache_path=str(tmpdir)))
+    return CacheConfig(size="10M", use_etag=False, location=str(tmpdir))
 
 
 @pytest.fixture
 def cache_config_with_etag(tmpdir):
     """Fixture for CacheConfig object with etag support enabled."""
-    return CacheConfig(size="10M", use_etag=True, backend=CacheBackendConfig(cache_path=str(tmpdir)))
+    return CacheConfig(size="10M", use_etag=True, location=str(tmpdir))
 
 
 @pytest.fixture
 def cache_manager(profile_name, cache_config):
     """Fixture for CacheManager object."""
-    return CacheBackendFactory.create(profile=profile_name, cache_config=cache_config)
+    return CacheManager(profile=profile_name, cache_config=cache_config)
 
 
 @pytest.fixture
 def cache_manager_with_etag(profile_name, cache_config_with_etag):
     """Fixture for CacheManager object with etag support enabled."""
-    return CacheBackendFactory.create(profile=profile_name, cache_config=cache_config_with_etag)
+    return CacheManager(profile=profile_name, cache_config=cache_config_with_etag)
 
 
 def test_cache_config_size_bytes(cache_config):
@@ -112,7 +106,7 @@ def test_cache_manager_preserves_directory_structure(profile_name, tmpdir, cache
         assert cached_data == content.encode(), f"Content mismatch for {path}"
 
         # Verify file exists in cache
-        cache_path = os.path.join(tmpdir, profile_name, cache_manager.get_cache_key(f"bucket/{test_uuid}/{path}"))
+        cache_path = os.path.join(tmpdir, profile_name, f"bucket/{test_uuid}/{path}")
         assert os.path.exists(cache_path), f"File not found in cache: {path}"
 
     # Get all directories in the cache
@@ -168,7 +162,7 @@ def test_cache_manager_read_file_with_etag(profile_name, tmpdir, cache_manager_w
     assert cache_manager_with_etag.read(key_bin, source_version=source_version) == b"binary data"
 
     # Verify that the file is stored with the etag in the path
-    expected_path = os.path.join(tmpdir, profile_name, cache_manager_with_etag.get_cache_key(key))
+    expected_path = os.path.join(tmpdir, profile_name, key)
     assert os.path.exists(expected_path), f"File should exist at {expected_path}"
 
     # Test that reading without etag returns None
@@ -190,8 +184,7 @@ def test_cache_manager_read_delete_file_with_etag(profile_name, tmpdir, cache_ma
         cache_manager_with_etag.set(key, str(file), source_version=source_version)
 
     # Verify the lock file is in the same directory as the file
-    cache_key = cache_manager_with_etag.get_cache_key(key)
-    lock_path = os.path.join(tmpdir, profile_name, os.path.dirname(cache_key), f".{os.path.basename(cache_key)}.lock")
+    lock_path = os.path.join(tmpdir, profile_name, os.path.dirname(key), f".{os.path.basename(key)}.lock")
     assert os.path.exists(lock_path)
 
     # Verify we can read the file
@@ -201,7 +194,7 @@ def test_cache_manager_read_delete_file_with_etag(profile_name, tmpdir, cache_ma
     cache_manager_with_etag.delete(key)
 
     # Verify the file and its lock are deleted
-    assert not os.path.exists(os.path.join(tmpdir, profile_name, cache_key))
+    assert not os.path.exists(os.path.join(tmpdir, profile_name, key))
     assert not os.path.exists(lock_path)
 
     # Test that reading after delete returns None
@@ -219,9 +212,8 @@ def test_cache_manager_read_delete_file(profile_name, tmpdir, cache_manager):
     with cache_manager.acquire_lock(key):
         cache_manager.set(key, str(file))
 
-    # Verify the lock file is in the same directory as the file
-    cache_key = cache_manager.get_cache_key(key)
-    lock_path = os.path.join(tmpdir, profile_name, os.path.dirname(cache_key), f".{os.path.basename(cache_key)}.lock")
+    # Verify the lock file is in the same directory
+    lock_path = os.path.join(tmpdir, profile_name, os.path.dirname(key), f".{os.path.basename(key)}.lock")
     assert os.path.exists(lock_path)
 
     assert cache_manager.read(key) == b"cached data"
@@ -229,7 +221,7 @@ def test_cache_manager_read_delete_file(profile_name, tmpdir, cache_manager):
     cache_manager.delete(key)
 
     # Verify the file and its lock are deleted
-    assert not os.path.exists(os.path.join(tmpdir, profile_name, cache_key))
+    assert not os.path.exists(os.path.join(tmpdir, profile_name, key))
     assert not os.path.exists(lock_path)
 
 
@@ -245,11 +237,11 @@ def test_cache_manager_open_file(profile_name, tmpdir, cache_manager):
 
     with cache_manager.open(key, "r") as result:
         assert result.read() == "cached data"
-        assert result.name == os.path.join(tmpdir, profile_name, cache_manager.get_cache_key(key))
+        assert result.name == os.path.join(tmpdir, profile_name, key)
 
     with cache_manager.open(key, "rb") as result:
         assert result.read() == b"cached data"
-        assert result.name == os.path.join(tmpdir, profile_name, cache_manager.get_cache_key(key))
+        assert result.name == os.path.join(tmpdir, profile_name, key)
 
 
 def test_cache_manager_refresh_cache(tmpdir):
@@ -258,8 +250,8 @@ def test_cache_manager_refresh_cache(tmpdir):
     cache_dir = os.path.join(str(tmpdir), "refresh_test")
     os.makedirs(cache_dir, exist_ok=True)
 
-    cache_config = CacheConfig(size="10M", use_etag=False, backend=CacheBackendConfig(cache_path=cache_dir))
-    cache_manager = CacheBackendFactory.create(profile="refresh_test", cache_config=cache_config)
+    cache_config = CacheConfig(size="10M", use_etag=False, location=cache_dir)
+    cache_manager = CacheManager(profile="refresh_test", cache_config=cache_config)
 
     data_10mb = b"*" * 10 * 1024 * 1024
     for i in range(20):
@@ -304,16 +296,13 @@ def test_cache_manager_metrics(profile_name, tmpdir, cache_manager):
 def lru_cache_config(tmpdir):
     cache_dir = os.path.join(str(tmpdir), "lru_cache")
     return CacheConfig(
-        size="10M",
-        use_etag=False,
-        eviction_policy=EvictionPolicyConfig(policy="LRU"),
-        backend=CacheBackendConfig(cache_path=cache_dir),
+        size="10M", use_etag=False, location=cache_dir, eviction_policy=EvictionPolicyConfig(policy="LRU")
     )
 
 
 def test_lru_eviction_policy(profile_name, lru_cache_config):
     # Create the CacheManager with the provided lru_cache_config
-    cache_manager = CacheBackendFactory.create(profile=profile_name, cache_config=lru_cache_config)
+    cache_manager = CacheManager(profile=profile_name, cache_config=lru_cache_config)
 
     test_uuid = str(uuid.uuid4())
     # Add files to the cache (each file is 3 MB)
@@ -352,16 +341,13 @@ def test_lru_eviction_policy(profile_name, lru_cache_config):
 def fifo_cache_config(tmpdir):
     cache_dir = os.path.join(str(tmpdir), "fifo_cache")
     return CacheConfig(
-        size="10M",
-        use_etag=False,
-        eviction_policy=EvictionPolicyConfig(policy="FIFO"),
-        backend=CacheBackendConfig(cache_path=cache_dir),
+        size="10M", use_etag=False, location=cache_dir, eviction_policy=EvictionPolicyConfig(policy="FIFO")
     )
 
 
 def test_fifo_eviction_policy(profile_name, fifo_cache_config):
     # Create the CacheManager with the provided fifo_cache_config
-    cache_manager = CacheBackendFactory.create(profile=profile_name, cache_config=fifo_cache_config)
+    cache_manager = CacheManager(profile=profile_name, cache_config=fifo_cache_config)
 
     test_uuid = str(uuid.uuid4())
     # Add files to the cache (each file is 3 MB)
@@ -413,10 +399,7 @@ def test_fifo_eviction_policy(profile_name, fifo_cache_config):
 def random_cache_config(tmpdir):
     cache_dir = os.path.join(str(tmpdir), "random_cache")
     return CacheConfig(
-        size="10M",
-        use_etag=False,
-        eviction_policy=EvictionPolicyConfig(policy="RANDOM"),
-        backend=CacheBackendConfig(cache_path=cache_dir),
+        size="10M", use_etag=False, location=cache_dir, eviction_policy=EvictionPolicyConfig(policy="RANDOM")
     )
 
 
@@ -442,13 +425,13 @@ def test_random_eviction_policy(profile_name, random_cache_config):
     :param random_cache_config: Cache configuration with random eviction policy
     """
     # Clean the entire cache directory
-    cache_dir = random_cache_config.backend.cache_path
+    cache_dir = random_cache_config.location
     if os.path.exists(cache_dir):
         shutil.rmtree(cache_dir)
     os.makedirs(cache_dir)
 
     # Create the CacheManager with the provided random_cache_config
-    cache_manager = CacheBackendFactory.create(profile=profile_name, cache_config=random_cache_config)
+    cache_manager = CacheManager(profile=profile_name, cache_config=random_cache_config)
 
     test_uuid = str(uuid.uuid4())
     # Add files to the cache (each file is 3 MB)
@@ -519,12 +502,7 @@ def create_new_cache_config(profile_config, tmpdir):
     """Helper function to create new cache config."""
     return {
         "profiles": {"s3-local": profile_config},
-        "cache": {
-            "size": "10M",
-            "use_etag": False,
-            "eviction_policy": {"policy": "random", "refresh_interval": 300},
-            "cache_backend": {"cache_path": str(tmpdir)},
-        },
+        "cache": {"size": "10M", "use_etag": False, "eviction_policy": {"policy": "random", "refresh_interval": 300}},
     }
 
 
@@ -532,12 +510,7 @@ def create_mixed_cache_config(profile_config, tmpdir):
     """Helper function to create mixed cache config."""
     return {
         "profiles": {"s3-local": profile_config},
-        "cache": {
-            "size_mb": 10,
-            "use_etag": False,
-            "eviction_policy": {"policy": "random", "refresh_interval": 300},
-            "cache_backend": {"cache_path": str(tmpdir)},
-        },
+        "cache": {"size_mb": 10, "use_etag": False, "eviction_policy": {"policy": "random", "refresh_interval": 300}},
     }
 
 
@@ -631,24 +604,23 @@ def test_storage_provider_partial_cache_config(storage_provider_partial_cache_co
         config_dict = storage_provider_partial_cache_config(temp_store.profile_config_dict())
         storage_config = StorageClientConfig.from_dict(config_dict)
         real_storage_provider = storage_config.storage_provider
-        cache_backend = storage_config.cache_manager
+        cache_manager = storage_config.cache_manager
 
         # Clean up any existing objects in the bucket with test prefix
         for obj in real_storage_provider.list_objects(prefix="test_"):
             real_storage_provider.delete_object(obj.key)
 
         # Access the CacheManager
-        cache_manager = storage_config.cache_manager
         verify_cache_operations(cache_manager)
 
         cache_config = storage_config.cache_config
         assert cache_config is not None
         assert cache_config.size == "100M"
-        assert cache_config.backend.cache_path is not None and isinstance(cache_config.backend.cache_path, str)
+        assert cache_config.location is not None and isinstance(cache_config.location, str)
         assert cache_config.eviction_policy.policy == "fifo"
         assert cache_config.eviction_policy.refresh_interval == DEFAULT_CACHE_REFRESH_INTERVAL
         assert cache_config.use_etag
-        assert isinstance(cache_backend, FileSystemBackend)
+        assert isinstance(cache_manager, CacheManager)
 
 
 @pytest.mark.parametrize(
@@ -661,48 +633,11 @@ def test_storage_provider_partial_cache_config(storage_provider_partial_cache_co
     ],
     ids=["s3", "swiftstack", "azure", "gcs"],
 )
-def test_storage_provider_backend_requires_s3_provider(temp_data_store_type, expected_error):
-    """Test that storage provider based cache backend only works with S3-based providers."""
-    with temp_data_store_type() as temp_data_store:
-        # Get the profile name from the temp data store
-        profile_config = temp_data_store.profile_config_dict()
-        profile_name = list(profile_config.keys())[0]
-
-        # Create a cache config with storage provider profile
-        cache_config = CacheConfig(
-            size="100M",
-            use_etag=True,
-            eviction_policy=EvictionPolicyConfig(policy="no_eviction"),
-            backend=CacheBackendConfig(cache_path="tmp/msc_cache", storage_provider_profile=profile_name),
-        )
-
-        # Get the storage provider from the temp data store
-        profile = "test-profile"
-        config_dict = {"profiles": {profile: temp_data_store.profile_config_dict()}}
-        storage_config = StorageClientConfig.from_dict(config_dict=config_dict, profile=profile)
-        storage_provider = storage_config.storage_provider
-
-        if expected_error is None:
-            # For S3-based providers, creation should succeed
-            backend = CacheBackendFactory.create(profile, cache_config, storage_provider)
-            assert isinstance(backend._storage_provider, (S3StorageProvider, S8KStorageProvider))
-        else:
-            # For non-S3 providers, creation should fail
-            with pytest.raises(
-                expected_error,
-                match="The storage_provider_profile must reference a profile that uses a storage provider of type s3 or s8k",
-            ):
-                CacheBackendFactory.create(profile, cache_config, storage_provider)
-
-
 @pytest.fixture
 def no_eviction_cache_config(tmpdir):
     cache_dir = os.path.join(str(tmpdir), "no_eviction_cache")
     return CacheConfig(
-        size="3M",
-        use_etag=False,
-        eviction_policy=EvictionPolicyConfig(policy="NO_EVICTION"),
-        backend=CacheBackendConfig(cache_path=cache_dir),
+        size="3M", use_etag=False, location=cache_dir, eviction_policy=EvictionPolicyConfig(policy="NO_EVICTION")
     )
 
 
@@ -720,13 +655,13 @@ def test_no_eviction_policy(profile_name, no_eviction_cache_config):
     :param no_eviction_cache_config: Cache configuration with NO_EVICTION eviction policy
     """
     # Clean the entire cache directory
-    cache_dir = no_eviction_cache_config.backend.cache_path
+    cache_dir = no_eviction_cache_config.location
     if os.path.exists(cache_dir):
         shutil.rmtree(cache_dir)
     os.makedirs(cache_dir)
 
     # Create the CacheManager with the provided no_eviction_cache_config
-    cache_manager = CacheBackendFactory.create(profile=profile_name, cache_config=no_eviction_cache_config)
+    cache_manager = CacheManager(profile=profile_name, cache_config=no_eviction_cache_config)
 
     # Verify no eviction thread is created
     assert not hasattr(cache_manager, "_eviction_thread"), "No eviction thread should be created for NONE policy"

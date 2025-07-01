@@ -13,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .cache_backend import CacheBackend, FileSystemBackend, StorageProviderBackend
-from .cache_config import CacheBackendConfig, CacheConfig, EvictionPolicyConfig
+from .cache_config import CacheConfig, EvictionPolicyConfig
 from .cache_item import CacheItem
 from .eviction_policy import (
     FIFO,
@@ -40,9 +39,5 @@ __all__ = [
     "RandomEvictionPolicy",
     "EvictionPolicyFactory",
     "CacheConfig",
-    "CacheBackend",
-    "FileSystemBackend",
-    "StorageProviderBackend",
-    "CacheBackendConfig",
     "EvictionPolicyConfig",
 ]

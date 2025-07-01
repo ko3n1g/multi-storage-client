@@ -22,8 +22,8 @@ from unittest.mock import patch
 
 import pytest
 
-from multistorageclient.cache import CacheBackendFactory
-from multistorageclient.caching.cache_config import CacheBackendConfig, CacheConfig
+from multistorageclient.cache import CacheManager
+from multistorageclient.caching.cache_config import CacheConfig
 
 
 def worker_write_read(cache_dir, keys, data, barrier, result_queue):
@@ -31,8 +31,8 @@ def worker_write_read(cache_dir, keys, data, barrier, result_queue):
     Worker function that use CacheManager to write and read data at random order.
     """
     try:
-        cache_config = CacheConfig(size="10M", use_etag=False, backend=CacheBackendConfig(cache_path=cache_dir))
-        cache_manager = CacheBackendFactory.create(profile="test", cache_config=cache_config)
+        cache_config = CacheConfig(size="10M", use_etag=False)
+        cache_manager = CacheManager(profile="test", cache_config=cache_config)
 
         # Synchronize all worker processes at this point
         barrier.wait()
@@ -73,8 +73,8 @@ def worker_write_refresh(cache_dir, keys, data, barrier, return_dict, result_que
     Worker function that use CacheManager to write and read data at random order.
     """
     try:
-        cache_config = CacheConfig(size="10M", use_etag=False, backend=CacheBackendConfig(cache_path=cache_dir))
-        cache_manager = CacheBackendFactory.create(profile="test", cache_config=cache_config)
+        cache_config = CacheConfig(size="10M", use_etag=False, location=cache_dir)
+        cache_manager = CacheManager(profile="test", cache_config=cache_config)
 
         # Synchronize all worker processes at this point
         barrier.wait()
@@ -88,9 +88,7 @@ def worker_write_refresh(cache_dir, keys, data, barrier, return_dict, result_que
         barrier.wait()
 
         # Refresh the cache and verify the size
-        with patch(
-            "multistorageclient.caching.cache_backend.FileSystemBackend.evict_files", new=lambda self: time.sleep(5)
-        ):
+        with patch("multistorageclient.cache.CacheManager.evict_files", new=lambda self: time.sleep(5)):
             cache_refreshed = cache_manager.refresh_cache()
 
         return_dict[os.getpid()] = cache_refreshed
@@ -144,8 +142,8 @@ def test_multiprocessing_cache_manager(cache_dir):
             pytest.fail(f"Worker process failed with error: {result}")
 
     # Check the final cache size
-    cache_config = CacheConfig(size="10M", use_etag=False, backend=CacheBackendConfig(cache_path=cache_dir))
-    cache_manager = CacheBackendFactory.create(profile="test", cache_config=cache_config)
+    cache_config = CacheConfig(size="10M", use_etag=False, location=cache_dir)
+    cache_manager = CacheManager(profile="test", cache_config=cache_config)
     assert cache_manager.cache_size() <= max_cache_size
 
 
