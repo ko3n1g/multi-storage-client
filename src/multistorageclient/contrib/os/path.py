@@ -19,7 +19,7 @@ from typing import Union
 
 from ...pathlib import MultiStoragePath as Path
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def exists(path: Union[str, os.PathLike]) -> bool:

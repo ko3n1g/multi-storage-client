@@ -23,7 +23,7 @@ from .client import StorageClient
 from .config import DEFAULT_POSIX_PROFILE_NAME, SUPPORTED_IMPLICIT_PROFILE_PROTOCOLS, StorageClientConfig
 from .file import ObjectFile, PosixFile
 from .telemetry import Telemetry
-from .types import MSC_PROTOCOL, ObjectMetadata
+from .types import MSC_PROTOCOL, ExecutionMode, ObjectMetadata
 
 _TELEMETRY: Optional[Telemetry] = None
 _TELEMETRY_LOCK = threading.Lock()
@@ -296,7 +296,12 @@ def is_file(url: str) -> bool:
     return client.is_file(path=path)
 
 
-def sync(source_url: str, target_url: str, delete_unmatched_files: bool = False) -> None:
+def sync(
+    source_url: str,
+    target_url: str,
+    delete_unmatched_files: bool = False,
+    execution_mode: ExecutionMode = ExecutionMode.LOCAL,
+) -> None:
     """
     Syncs files from the source storage to the target storage.
 
@@ -306,7 +311,9 @@ def sync(source_url: str, target_url: str, delete_unmatched_files: bool = False)
     """
     source_client, source_path = resolve_storage_client(source_url)
     target_client, target_path = resolve_storage_client(target_url)
-    target_client.sync_from(source_client, source_path, target_path, delete_unmatched_files)
+    target_client.sync_from(
+        source_client, source_path, target_path, delete_unmatched_files, execution_mode=execution_mode
+    )
 
 
 def list(

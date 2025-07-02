@@ -183,3 +183,5 @@ def test_multiprocessing_cache_manager_single_refresh(cache_dir):
 
     # Verify only one process refreshed the cache
     assert len([d for d in return_dict.values() if d is True]) == 1
+
+    manager.shutdown()

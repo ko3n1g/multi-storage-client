@@ -42,7 +42,7 @@ from .utils import validate_attributes
 if TYPE_CHECKING:
     from .client import StorageClient
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class RemoteFileReader(IO[bytes]):

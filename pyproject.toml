@@ -89,6 +89,9 @@ xarray = [
 zarr = [
     "zarr~=2.15"
 ]
+ray = [
+    "ray~=2.34.0"
+]
 
 [dependency-groups]
 dev = [
@@ -151,6 +154,7 @@ include = [
     "src",
     "tests"
 ]
+typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 addopts = [

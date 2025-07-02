@@ -508,3 +508,12 @@ class AutoCommitConfig:
     def __init__(self, interval_minutes: Optional[float] = None, at_exit: bool = False) -> None:
         self.interval_minutes = interval_minutes
         self.at_exit = at_exit
+
+
+class ExecutionMode(Enum):
+    """
+    Enum for controlling execution mode in sync operations.
+    """
+
+    LOCAL = "local"
+    RAY = "ray"

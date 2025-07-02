@@ -34,7 +34,7 @@ DEFAULT_EXPORT_INTERVAL_MILLIS: float = 60000
 # OTel spec.
 DEFAULT_EXPORT_TIMEOUT_MILLIS: float = 30000
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class DiperiodicExportingMetricReader(sdk_metrics_export.MetricReader):

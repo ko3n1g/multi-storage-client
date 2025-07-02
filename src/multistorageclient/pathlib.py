@@ -24,7 +24,7 @@ from .shortcuts import resolve_storage_client
 from .types import MSC_PROTOCOL, ObjectMetadata, SourceVersionCheckMode
 from .utils import join_paths
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StatResult:

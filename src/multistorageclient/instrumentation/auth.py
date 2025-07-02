@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 import requests
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 0.5

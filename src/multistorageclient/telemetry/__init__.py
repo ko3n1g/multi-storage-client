@@ -53,7 +53,7 @@ _TRACE_EXPORTER_MAPPING = {
     "otlp": "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
 }
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Telemetry:

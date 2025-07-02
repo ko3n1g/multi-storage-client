@@ -27,7 +27,7 @@ from typing import Any, Optional
 from ..types import MetadataProvider, ObjectMetadata, StorageProvider
 from ..utils import glob
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_MANIFEST_BASE_DIR = ".msc_manifests"

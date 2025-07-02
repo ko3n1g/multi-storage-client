@@ -22,7 +22,7 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExp
 
 from multistorageclient.instrumentation.auth import AccessTokenProvider, AzureAccessTokenProvider
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _OTLPMSALMetricExporter(OTLPMetricExporter):

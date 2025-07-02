@@ -114,7 +114,7 @@ BACKOFF_FACTOR = 0.5
 
 _setup_lock = threading.Lock()
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _setup_opentelemetry_impl(config: dict[str, Any]) -> None:
