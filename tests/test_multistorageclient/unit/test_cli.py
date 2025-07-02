@@ -63,6 +63,20 @@ def test_help_command(run_cli):
     assert "help" in stdout
 
 
+def test_subcommand_help_without_required_args_error(run_cli):
+    """Test that --help for subcommands works without showing required argument errors."""
+
+    # Test ls --help
+    _, stderr = run_cli("ls", "--help")
+    # Ensure no error about required arguments
+    assert "error: the following arguments are required" not in stderr
+
+    # Test sync --help
+    _, stderr = run_cli("sync", "--help")
+    # Ensure no error about required arguments
+    assert "error: the following arguments are required" not in stderr
+
+
 def test_sync_help_command(run_cli):
     stdout, stderr = run_cli("help", "sync")
     assert "Synchronize files" in stdout
@@ -237,6 +251,56 @@ def test_ls_command_with_attribute_filter_expression(run_cli):
         assert "Total Objects:" in stdout
         assert "Total Size:" in stdout
         assert "B" in stdout  # Should show bytes unit
+
+
+def test_ls_command_with_show_attributes(run_cli):
+    with tempfile.TemporaryDirectory() as test_dir:
+        # Create test files with different attributes
+        files_with_attrs = [
+            ("dataset1.bin", {"type": "dataset", "version": "1.5", "priority": "8"}),
+            ("dataset2.bin", {"type": "dataset", "version": "0.8", "priority": "12"}),
+            ("model.bin", {"type": "model", "version": "2.0", "priority": "5"}),
+            ("config.txt", {"type": "config", "version": "1.0", "priority": "15"}),
+        ]
+
+        for filename, attributes in files_with_attrs:
+            file_path = f"{test_dir}/{filename}"
+            with msc.open(file_path, "w", attributes=attributes) as f:
+                f.write(f"Content of {filename}")
+
+        # Show attributes without filters
+        stdout, _ = run_cli(
+            "ls",
+            "--recursive",
+            "--show-attributes",
+            test_dir,
+        )
+        assert "dataset1.bin" in stdout
+        assert "dataset2.bin" in stdout
+        assert "model.bin" in stdout
+        assert "config.txt" in stdout
+
+        # Check that JSON attributes are displayed for dataset files
+        assert '{"type": "dataset", "version": "1.5", "priority": "8"}' in stdout
+        assert '{"type": "dataset", "version": "0.8", "priority": "12"}' in stdout
+        assert '{"type": "model", "version": "2.0", "priority": "5"}' in stdout
+        assert '{"type": "config", "version": "1.0", "priority": "15"}' in stdout
+
+        # Show attributes with filters
+        stdout, _ = run_cli(
+            "ls",
+            "--recursive",
+            "--show-attributes",
+            "--attribute-filter-expression",
+            'type = "dataset"',
+            test_dir,
+        )
+        assert "dataset1.bin" in stdout
+        assert "dataset2.bin" in stdout
+
+        # Check that JSON attributes are displayed for dataset files
+        assert '{"type": "dataset", "version": "1.5", "priority": "8"}' in stdout
+        assert '{"type": "dataset", "version": "0.8", "priority": "12"}' in stdout
 
 
 def test_attribute_filter_expression_parsing_errors(run_cli):

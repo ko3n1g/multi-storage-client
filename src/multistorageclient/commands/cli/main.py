@@ -79,6 +79,11 @@ def main() -> int:
     cmd_parser = MSCArgumentParser(prog=f"msc {args.command}", description=action.help())
     action.setup_parser(cmd_parser)
 
+    # Check if --help is in the subcommand arguments
+    if "--help" in args.args or "-h" in args.args:
+        cmd_parser.print_help()
+        return 0
+
     try:
         cmd_args = cmd_parser.parse_args(args.args)
         return action.run(cmd_args)

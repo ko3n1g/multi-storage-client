@@ -276,7 +276,7 @@ class BaseStorageProvider(StorageProvider):
                         f"While listing objects, failed to get object metadata for {obj.key}: {e}, skipping the object"
                     )
                 if obj_metadata and matches_attribute_filter_expression(obj_metadata, evaluator):
-                    yield obj
+                    yield obj_metadata
                 else:
                     continue
             else:
