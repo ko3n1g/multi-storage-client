@@ -243,7 +243,7 @@ class AIStoreStorageProvider(BaseStorageProvider):
             obj.put_content(body)
             validated_attributes = validate_attributes(attributes)
             if validated_attributes:
-                obj.set_custom_props(custom_metadata=validated_attributes)
+                obj.set_custom_props(custom_metadata=validated_attributes, replace_existing=True)
 
             return len(body)
 
@@ -339,16 +339,16 @@ class AIStoreStorageProvider(BaseStorageProvider):
             with open(f, "rb") as fp:
                 body = fp.read()
                 file_size = len(body)
-                self._put_object(remote_path, body)
+                self._put_object(remote_path, body, attributes=attributes)
         else:
             if isinstance(f, io.StringIO):
                 body = f.read().encode("utf-8")
                 file_size = len(body)
-                self._put_object(remote_path, body)
+                self._put_object(remote_path, body, attributes=attributes)
             else:
                 body = f.read()
                 file_size = len(body)
-                self._put_object(remote_path, body)
+                self._put_object(remote_path, body, attributes=attributes)
 
         return file_size
 

@@ -330,12 +330,23 @@ class OracleStorageProvider(BaseStorageProvider):
                 response = self._oci_client.head_object(
                     namespace_name=self._namespace, bucket_name=bucket, object_name=key
                 )
+
+                # Extract custom metadata from headers with 'opc-meta-' prefix
+                attributes = {}
+                if response.headers:  # pyright: ignore [reportOptionalMemberAccess]
+                    for metadata_key, metadata_val in response.headers.items():  # pyright: ignore [reportOptionalMemberAccess]
+                        if metadata_key.startswith("opc-meta-"):
+                            # Remove the 'opc-meta-' prefix to get the original key
+                            metadata_key = metadata_key[len("opc-meta-") :]
+                            attributes[metadata_key] = metadata_val
+
                 return ObjectMetadata(
                     key=path,
                     content_length=int(response.headers["Content-Length"]),  # pyright: ignore [reportOptionalMemberAccess]
                     content_type=response.headers.get("Content-Type", None),  # pyright: ignore [reportOptionalMemberAccess]
                     last_modified=dateutil_parser(response.headers["last-modified"]),  # pyright: ignore [reportOptionalMemberAccess]
                     etag=response.headers.get("etag", None),  # pyright: ignore [reportOptionalMemberAccess]
+                    metadata=attributes if attributes else None,
                 )
 
             try:
@@ -443,6 +454,7 @@ class OracleStorageProvider(BaseStorageProvider):
         file_size: int = 0
         self._refresh_oci_client_if_needed()
 
+        validated_attributes = validate_attributes(attributes)
         if isinstance(f, str):
             file_size = os.path.getsize(f)
 
@@ -455,10 +467,15 @@ class OracleStorageProvider(BaseStorageProvider):
                         file_path=f,
                         part_size=self._multipart_chunk_size,
                         allow_parallel_uploads=True,
+                        metadata=validated_attributes or {},
                     )
                 else:
                     self._upload_manager.upload_file(
-                        namespace_name=self._namespace, bucket_name=bucket, object_name=key, file_path=f
+                        namespace_name=self._namespace,
+                        bucket_name=bucket,
+                        object_name=key,
+                        file_path=f,
+                        metadata=validated_attributes or {},
                     )
 
                 return file_size
@@ -484,10 +501,15 @@ class OracleStorageProvider(BaseStorageProvider):
                         stream_ref=f,
                         part_size=self._multipart_chunk_size,
                         allow_parallel_uploads=True,
+                        metadata=validated_attributes or {},
                     )
                 else:
                     self._upload_manager.upload_stream(
-                        namespace_name=self._namespace, bucket_name=bucket, object_name=key, stream_ref=f
+                        namespace_name=self._namespace,
+                        bucket_name=bucket,
+                        object_name=key,
+                        stream_ref=f,
+                        metadata=validated_attributes or {},
                     )
 
                 return file_size

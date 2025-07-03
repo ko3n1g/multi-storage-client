@@ -438,13 +438,14 @@ class AzureBlobStorageProvider(BaseStorageProvider):
         file_size: int = 0
         self._refresh_blob_service_client_if_needed()
 
+        validated_attributes = validate_attributes(attributes)
         if isinstance(f, str):
             file_size = os.path.getsize(f)
 
             def _invoke_api() -> int:
                 blob_client = self._blob_service_client.get_blob_client(container=container_name, blob=blob_name)
                 with open(f, "rb") as data:
-                    blob_client.upload_blob(data, overwrite=True)
+                    blob_client.upload_blob(data, overwrite=True, metadata=validated_attributes or {})
 
                 return file_size
 
@@ -464,7 +465,7 @@ class AzureBlobStorageProvider(BaseStorageProvider):
 
             def _invoke_api() -> int:
                 blob_client = self._blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-                blob_client.upload_blob(fp, overwrite=True)
+                blob_client.upload_blob(fp, overwrite=True, metadata=validated_attributes or {})
 
                 return file_size
 

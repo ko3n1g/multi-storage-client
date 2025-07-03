@@ -49,3 +49,10 @@ def test_oci_conditional_put(profile_name):
         if_match_error_type=PreconditionFailedError,
         if_none_match_specific_error_type=None,
     )
+
+
+@pytest.mark.parametrize("profile_name", ["test-oci"])
+def test_oci_attributes(profile_name):
+    """Test OCI attributes functionality - storing custom metadata with msc_ prefix."""
+    profile = profile_name
+    common.test_attributes(profile)
