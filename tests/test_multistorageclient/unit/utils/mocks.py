@@ -23,6 +23,7 @@ from multistorageclient.types import (
     MetadataProvider,
     ObjectMetadata,
     ProviderBundle,
+    Replica,
     StorageProviderConfig,
 )
 from multistorageclient.utils import glob as glob_util
@@ -126,3 +127,10 @@ class TestProviderBundle(ProviderBundle):
         Returns the metadata provider responsible for retrieving metadata about objects in the storage service.
         """
         return TestMetadataProvider()
+
+    @property
+    def replicas(self) -> list[Replica]:
+        """
+        Returns the replicas configuration for this provider bundle, if any.
+        """
+        return []

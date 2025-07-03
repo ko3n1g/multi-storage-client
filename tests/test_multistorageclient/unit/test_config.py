@@ -947,6 +947,160 @@ def test_s3_storage_provider_with_rust_client() -> None:
     assert storage_provider._rust_client is not None
 
 
+def test_replica_validation_valid_config():
+    """Test that valid replica configurations are accepted."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica2", "read_priority": 2},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+        }
+    }
+
+    # This should not raise any exceptions
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 2
+
+    # Verify specific (replica_profile, read_priority) pairs to detect ordering/auto-assignment regressions
+    replicas = [(r.replica_profile, r.read_priority) for r in config.replicas]
+    assert replicas == [("replica1", 1), ("replica2", 2)]
+
+
+def test_replica_validation_circular_reference():
+    """Test that circular references in replicas are detected and rejected."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+                "replicas": [
+                    {"replica_profile": "primary", "read_priority": 1},
+                ],
+            },
+        }
+    }
+
+    with pytest.raises(ValueError, match="Invalid replica configuration: profile 'replica1' has its own replicas"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
+def test_replica_validation_missing_profile():
+    """Test that missing replica profiles are detected and rejected."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "nonexistent", "read_priority": 1},
+                ],
+            },
+        }
+    }
+
+    with pytest.raises(ValueError, match="Replica profile 'nonexistent' not found in configuration"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
+def test_replica_validation_nested_circular_reference():
+    """Test that nested circular references in replicas are detected and rejected."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+                "replicas": [
+                    {"replica_profile": "replica2", "read_priority": 1},
+                ],
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                ],
+            },
+        }
+    }
+
+    with pytest.raises(ValueError, match="Invalid replica configuration: profile 'replica1' has its own replicas"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
+def test_replica_validation_self_reference():
+    """Test that self-referencing replicas are detected and rejected."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "primary", "read_priority": 1},
+                ],
+            },
+        }
+    }
+
+    with pytest.raises(ValueError, match="Replica profile primary cannot be the same as the profile primary"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
+def test_replica_validation_invalid_read_priority():
+    """Test that invalid read priorities are detected and rejected by schema validation."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 0},  # Invalid: 0
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+        }
+    }
+
+    with pytest.raises(RuntimeError, match="Failed to validate the config file"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+    # Test negative priority
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": -1},  # Invalid: negative
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+        }
+    }
+
+    with pytest.raises(RuntimeError, match="Failed to validate the config file"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
 def test_cache_backend_cache_path():
     """Test that cache_backend.cache_path is used as cache location when location is not defined."""
     config_dict = {
@@ -1023,3 +1177,213 @@ def test_cache_location_warning(caplog):
     warning_messages = [record.message for record in caplog.records if record.levelname == "WARNING"]
     assert len(warning_messages) > 0
     assert any("Both 'location' and 'cache_backend.cache_path' are defined" in msg for msg in warning_messages)
+
+
+def test_replica_validation_non_contiguous_priorities():
+    """Test that non-contiguous read priorities are allowed and work correctly."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica2", "read_priority": 3},  # Missing 2
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+        }
+    }
+
+    # This should not raise any exceptions - non-contiguous priorities are allowed
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 2
+
+    # Check that priorities are preserved as specified
+    priorities = sorted([replica.read_priority for replica in config.replicas])
+    assert priorities == [1, 3]
+
+
+def test_replica_validation_non_sequential_priorities():
+    """Test that non-sequential read priorities are allowed (they get sorted)."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 2},  # Will be sorted to 1
+                    {"replica_profile": "replica2", "read_priority": 1},  # Will be sorted to 2
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+        }
+    }
+
+    # This should pass because the validation sorts priorities first
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 2
+
+
+def test_replica_validation_duplicate_profiles():
+    """Test that duplicate replica profiles are detected and rejected by schema validation."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica1", "read_priority": 2},  # Duplicate profile
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+        }
+    }
+
+    # The business logic validation should catch duplicate replica profiles
+    with pytest.raises(ValueError, match="Duplicate replica entry for profile 'replica1'"):
+        StorageClientConfig.from_dict(config_dict, "primary")
+
+
+def test_replica_validation_priorities_not_starting_at_one():
+    """Test that read priorities not starting at 1 are allowed and work correctly."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 2},  # Starting at 2 is allowed
+                    {"replica_profile": "replica2", "read_priority": 3},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+        }
+    }
+
+    # This should not raise any exceptions - priorities not starting at 1 are allowed
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 2
+
+    # Check that priorities are preserved as specified
+    priorities = sorted([replica.read_priority for replica in config.replicas])
+    assert priorities == [2, 3]
+
+
+def test_replica_auto_increment_priorities():
+    """Test that read_priority is now mandatory and must be explicitly specified."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica2", "read_priority": 2},
+                    {"replica_profile": "replica3", "read_priority": 3},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+            "replica3": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica3"}},
+            },
+        }
+    }
+
+    # This should not raise any exceptions
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 3
+
+    # Check that priorities are as specified
+    priorities = sorted([replica.read_priority for replica in config.replicas])
+    assert priorities == [1, 2, 3]
+
+
+def test_replica_mixed_priorities():
+    """Test that all read_priority values must be explicitly specified."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica3", "read_priority": 3},
+                    {"replica_profile": "replica2", "read_priority": 2},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+            "replica3": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica3"}},
+            },
+        }
+    }
+
+    # This should not raise any exceptions
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 3
+
+    # Check that priorities are correctly assigned and contiguous
+    priorities = sorted([replica.read_priority for replica in config.replicas])
+    assert priorities == [1, 2, 3]
+
+
+def test_replica_mixed_priorities_with_gaps_is_allowed():
+    """Test that all read_priority values must be explicitly specified."""
+    config_dict = {
+        "profiles": {
+            "primary": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/primary"}},
+                "replicas": [
+                    {"replica_profile": "replica1", "read_priority": 1},
+                    {"replica_profile": "replica2", "read_priority": 5},
+                    {"replica_profile": "replica3", "read_priority": 6},
+                ],
+            },
+            "replica1": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica1"}},
+            },
+            "replica2": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica2"}},
+            },
+            "replica3": {
+                "storage_provider": {"type": "file", "options": {"base_path": "/tmp/replica3"}},
+            },
+        }
+    }
+
+    # This should not fail - all priorities are explicitly specified
+    config = StorageClientConfig.from_dict(config_dict, "primary")
+    assert config.replicas is not None
+    assert len(config.replicas) == 3
+
+    # Check that priorities are correctly assigned as specified
+    priorities = sorted([replica.read_priority for replica in config.replicas])
+    assert priorities == [1, 5, 6]

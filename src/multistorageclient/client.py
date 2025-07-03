@@ -29,7 +29,7 @@ from .instrumentation.utils import instrumented
 from .providers.posix_file import PosixFileStorageProvider
 from .retry import retry
 from .sync import SyncManager
-from .types import MSC_PROTOCOL, ExecutionMode, ObjectMetadata, Range, SourceVersionCheckMode
+from .types import MSC_PROTOCOL, ExecutionMode, ObjectMetadata, Range, Replica, SourceVersionCheckMode
 from .utils import NullStorageClient, join_paths
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class StorageClient:
         :param config: The configuration object for the storage client.
         """
         self._initialize_providers(config)
+        self._initialize_replicas(config.replicas)
 
     def _committer_thread(self, commit_interval_minutes: float, stop_event: threading.Event):
         if not stop_event:
@@ -127,6 +128,25 @@ class StorageClient:
     @property
     def profile(self) -> str:
         return self._config.profile
+
+    def _initialize_replicas(self, replicas: list["Replica"]) -> None:
+        """Initialize replica StorageClient instances."""
+        # Sort replicas by read_priority, the first one is the primary replica
+        sorted_replicas = sorted(replicas, key=lambda r: r.read_priority)
+
+        replica_clients = []
+        for replica in sorted_replicas:
+            replica_config = StorageClientConfig.from_file(profile=replica.replica_profile)
+
+            storage_client = StorageClient(config=replica_config)
+            replica_clients.append(storage_client)
+
+        self._replicas = replica_clients
+
+    @property
+    def replicas(self) -> list["StorageClient"]:
+        """Return StorageClient instances for all replicas, sorted by read priority."""
+        return self._replicas
 
     @retry
     def read(self, path: str, byte_range: Optional[Range] = None) -> bytes:
@@ -487,11 +507,14 @@ class StorageClient:
         del state["_cache_manager"]
         if "_metadata_provider_lock" in state:
             del state["_metadata_provider_lock"]
+        if "_replicas" in state:
+            del state["_replicas"]
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         config = state["_config"]
         self._initialize_providers(config)
+        self._initialize_replicas(config.replicas)
         if self._metadata_provider:
             self._metadata_provider_lock = threading.Lock()
 

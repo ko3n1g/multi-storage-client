@@ -235,6 +235,7 @@ class ObjectFile(IO):
         self._memory_load_limit = memory_load_limit
         self._open_files = []
         self._check_source_version = check_source_version
+
         if disable_read_cache:
             self._cache_manager = None
 

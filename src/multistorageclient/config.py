@@ -42,6 +42,7 @@ from .types import (
     CredentialsProvider,
     MetadataProvider,
     ProviderBundle,
+    Replica,
     RetryConfig,
     StorageProvider,
     StorageProviderConfig,
@@ -178,10 +179,15 @@ class SimpleProviderBundle(ProviderBundle):
         storage_provider_config: StorageProviderConfig,
         credentials_provider: Optional[CredentialsProvider] = None,
         metadata_provider: Optional[MetadataProvider] = None,
+        replicas: Optional[list[Replica]] = None,
     ):
+        if replicas is None:
+            replicas = []
+
         self._storage_provider_config = storage_provider_config
         self._credentials_provider = credentials_provider
         self._metadata_provider = metadata_provider
+        self._replicas = replicas
 
     @property
     def storage_provider_config(self) -> StorageProviderConfig:
@@ -194,6 +200,10 @@ class SimpleProviderBundle(ProviderBundle):
     @property
     def metadata_provider(self) -> Optional[MetadataProvider]:
         return self._metadata_provider
+
+    @property
+    def replicas(self) -> list[Replica]:
+        return self._replicas
 
 
 DEFAULT_CACHE_REFRESH_INTERVAL = 300
@@ -452,10 +462,26 @@ class StorageClientConfigLoader:
                 options = metadata_provider_dict.get("options", {})
                 metadata_provider = cls(**options)
 
+        # Build replicas if configured
+        replicas_config = profile_dict.get("replicas", [])
+        replicas = []
+        if replicas_config:
+            for replica_dict in replicas_config:
+                replicas.append(
+                    Replica(
+                        replica_profile=replica_dict["replica_profile"],
+                        read_priority=replica_dict["read_priority"],
+                    )
+                )
+
+            # Sort replicas by read_priority
+            replicas.sort(key=lambda r: r.read_priority)
+
         return SimpleProviderBundle(
             storage_provider_config=StorageProviderConfig(storage_provider_name, storage_options),
             credentials_provider=credentials_provider,
             metadata_provider=metadata_provider,
+            replicas=replicas,
         )
 
     def _build_provider_bundle_from_extension(self, provider_bundle_dict: dict[str, Any]) -> ProviderBundle:
@@ -491,8 +517,45 @@ class StorageClientConfigLoader:
                 "    refresh_interval: 300  # Optional: If not specified, default cache refresh interval (300 seconds) will be used\n"
             )
 
+    def _validate_replicas(self, replicas: list[Replica]) -> None:
+        """
+        Validates that replica profiles do not have their own replicas configuration.
+
+        This prevents circular references where a replica profile could reference
+        another profile that also has replicas, creating an infinite loop.
+
+        :param replicas: The list of Replica objects to validate
+        :raises ValueError: If any replica profile has its own replicas configuration
+        """
+        for replica in replicas:
+            replica_profile_name = replica.replica_profile
+
+            # Check that replica profile is not the same as the current profile
+            if replica_profile_name == self._profile:
+                raise ValueError(
+                    f"Replica profile {replica_profile_name} cannot be the same as the profile {self._profile}."
+                )
+
+            # Check if the replica profile exists in the configuration
+            if replica_profile_name not in self._profiles:
+                raise ValueError(f"Replica profile '{replica_profile_name}' not found in configuration")
+
+            # Get the replica profile configuration
+            replica_profile_dict = self._profiles[replica_profile_name]
+
+            # Check if the replica profile has its own replicas configuration
+            if "replicas" in replica_profile_dict and replica_profile_dict["replicas"]:
+                raise ValueError(
+                    f"Invalid replica configuration: profile '{replica_profile_name}' has its own replicas. "
+                    f"This creates a circular reference which is not allowed."
+                )
+
     def build_config(self) -> "StorageClientConfig":
         bundle = self._build_provider_bundle()
+
+        # Validate replicas to prevent circular references
+        self._validate_replicas(bundle.replicas)
+
         storage_provider = self._build_storage_provider(
             bundle.storage_provider_config.type,
             bundle.storage_provider_config.options,
@@ -586,6 +649,7 @@ class StorageClientConfigLoader:
             metric_gauges=self._metric_gauges,
             metric_counters=self._metric_counters,
             metric_attributes_providers=self._metric_attributes_providers,
+            replicas=bundle.replicas,
             autocommit_config=autocommit_config,
         )
 
@@ -741,6 +805,7 @@ class StorageClientConfig:
     metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]]
     metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]]
     metric_attributes_providers: Optional[Sequence[AttributesProvider]]
+    replicas: list[Replica]
     autocommit_config: Optional[AutoCommitConfig]
 
     _config_dict: Optional[dict[str, Any]]
@@ -757,8 +822,11 @@ class StorageClientConfig:
         metric_gauges: Optional[dict[Telemetry.GaugeName, api_metrics._Gauge]] = None,
         metric_counters: Optional[dict[Telemetry.CounterName, api_metrics.Counter]] = None,
         metric_attributes_providers: Optional[Sequence[AttributesProvider]] = None,
+        replicas: Optional[list[Replica]] = None,
         autocommit_config: Optional[AutoCommitConfig] = None,
     ):
+        if replicas is None:
+            replicas = []
         self.profile = profile
         self.storage_provider = storage_provider
         self.credentials_provider = credentials_provider
@@ -769,6 +837,7 @@ class StorageClientConfig:
         self.metric_gauges = metric_gauges
         self.metric_counters = metric_counters
         self.metric_attributes_providers = metric_attributes_providers
+        self.replicas = replicas
         self.autocommit_config = autocommit_config
 
     @staticmethod
@@ -946,6 +1015,7 @@ class StorageClientConfig:
         del state["storage_provider"]
         del state["metadata_provider"]
         del state["cache_manager"]
+        del state["replicas"]
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -970,4 +1040,5 @@ class StorageClientConfig:
         self.metric_counters = new_config.metric_counters
         self.metric_attributes_providers = new_config.metric_attributes_providers
         self._config_dict = config_dict
+        self.replicas = new_config.replicas
         self.autocommit_config = new_config.autocommit_config

@@ -444,6 +444,14 @@ class ProviderBundle(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def replicas(self) -> list["Replica"]:
+        """
+        :return: The replicas configuration for this provider bundle, if any.
+        """
+        pass
+
 
 @dataclass
 class RetryConfig:
@@ -495,6 +503,14 @@ class SourceVersionCheckMode(Enum):
     INHERIT = "inherit"  # Inherit from configuration (cache config)
     ENABLE = "enable"  # Always check source version
     DISABLE = "disable"  # Never check source version
+
+
+@dataclass
+class Replica:
+    """A tier of storage that can be used to store data."""
+
+    replica_profile: str
+    read_priority: int
 
 
 class AutoCommitConfig:

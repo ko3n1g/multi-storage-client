@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import Counter
 from typing import Any
 
 from jsonschema import validate
@@ -125,6 +126,18 @@ PROFILE_SCHEMA = {
                 },
                 "required": ["type", "options"],
             },
+            "replicas": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "replica_profile": {"type": "string"},
+                        "read_priority": {"type": "integer", "minimum": 1},
+                    },
+                    "required": ["replica_profile", "read_priority"],
+                },
+                "uniqueItems": True,
+            },
             "credentials_provider": EXTENSION_SCHEMA,
             "metadata_provider": EXTENSION_SCHEMA,
             "provider_bundle": EXTENSION_SCHEMA,
@@ -187,3 +200,13 @@ def validate_config(config_dict: dict[str, Any]) -> None:
         validate(instance=config_dict, schema=CONFIG_SCHEMA)
     except Exception as e:
         raise RuntimeError("Failed to validate the config file", e)
+
+    # Custom validation: ensure replica_profile uniqueness within each profile's replicas
+    profiles = config_dict.get("profiles", {})
+    for profile_name, profile in profiles.items():
+        replicas = profile.get("replicas", [])
+        replica_profiles = [r.get("replica_profile") for r in replicas]
+        counter = Counter(replica_profiles)
+        duplicates = [rp for rp, count in counter.items() if count > 1]
+        if duplicates:
+            raise ValueError(f"Duplicate replica entry for profile '{duplicates[0]}'")
