@@ -53,6 +53,7 @@ def verify_sync_and_contents(target_url: str, expected_files: dict):
         assert key in expected_files
 
 
+@pytest.mark.serial
 @pytest.mark.parametrize(
     argnames=["temp_data_store_type", "sync_kwargs"],
     argvalues=[

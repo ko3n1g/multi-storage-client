@@ -152,36 +152,34 @@ def test_multiprocessing_cache_manager_single_refresh(cache_dir):
     keys = [f"file-{i:04d}.bin" for i in range(num_procs * 10)]
     test_data = b"*" * 10 * 1024 * 1024
 
-    # Shared dictionary for collecting results from worker processes
-    manager = multiprocessing.Manager()
-    return_dict = manager.dict()
+    with multiprocessing.Manager() as manager:
+        # Shared dictionary for collecting results from worker processes
+        return_dict = manager.dict()
 
-    # Queue for capturing the success or failure of each process
-    result_queue = multiprocessing.Queue()
+        # Queue for capturing the success or failure of each process
+        result_queue = multiprocessing.Queue()
 
-    # Create a barrier that will block until all the processes reach it
-    barrier = multiprocessing.Barrier(num_procs, timeout=60)
+        # Create a barrier that will block until all the processes reach it
+        barrier = multiprocessing.Barrier(num_procs, timeout=60)
 
-    # Create multiple processes for testing
-    processes = []
-    for _ in range(num_procs):
-        p = multiprocessing.Process(
-            target=worker_write_refresh, args=(cache_dir, keys, test_data, barrier, return_dict, result_queue)
-        )
-        processes.append(p)
-        p.start()
+        # Create multiple processes for testing
+        processes = []
+        for _ in range(num_procs):
+            p = multiprocessing.Process(
+                target=worker_write_refresh, args=(cache_dir, keys, test_data, barrier, return_dict, result_queue)
+            )
+            processes.append(p)
+            p.start()
 
-    # Wait for all writer processes to finish
-    for p in processes:
-        p.join()
+        # Wait for all writer processes to finish
+        for p in processes:
+            p.join()
 
-    # Check the results from the queue for reader processes
-    while not result_queue.empty():
-        result = result_queue.get()
-        if isinstance(result, Exception):
-            pytest.fail(f"Worker process failed with error: {result}")
+        # Check the results from the queue for reader processes
+        while not result_queue.empty():
+            result = result_queue.get()
+            if isinstance(result, Exception):
+                pytest.fail(f"Worker process failed with error: {result}")
 
-    # Verify only one process refreshed the cache
-    assert len([d for d in return_dict.values() if d is True]) == 1
-
-    manager.shutdown()
+        # Verify only one process refreshed the cache
+        assert len([d for d in return_dict.values() if d is True]) == 1

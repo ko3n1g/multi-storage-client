@@ -22,6 +22,7 @@ import tempfile
 import time
 from collections.abc import Callable, Iterator, Sequence, Sized
 from datetime import datetime, timezone
+from enum import Enum
 from io import BytesIO, StringIO
 from typing import IO, Any, Optional, TypeVar, Union
 
@@ -39,6 +40,16 @@ _T = TypeVar("_T")
 PROVIDER = "file"
 
 logger = logging.getLogger(__name__)
+
+
+class _EntryType(Enum):
+    """
+    An enum representing the type of an entry in a directory.
+    """
+
+    FILE = 1
+    DIRECTORY = 2
+    DIRECTORY_TO_EXPLORE = 3
 
 
 def atomic_write(source: Union[str, IO], destination: str, attributes: Optional[dict[str, str]] = None):
@@ -248,62 +259,67 @@ class PosixFileStorageProvider(BaseStorageProvider):
             if not os.path.exists(parent_dir):
                 return
 
-            # List contents of parent directory for prefix based filtering
-            try:
-                entries = os.listdir(parent_dir)
-            except (OSError, PermissionError) as e:
-                logger.warning(f"Failed to list contents of {parent_dir}, caused by: {e}")
-                entries = []
-
-            matching_entries = []
-            for entry in entries:
-                full_path = os.path.join(parent_dir, entry)
-                if full_path.startswith(prefix):
-                    matching_entries.append(full_path)
-
-            matching_entries.sort()
-
-            # Collect directories to walk
-            directories_to_walk = []
-
-            for full_path in matching_entries:
-                relative_path = os.path.relpath(full_path, self._base_path)
-                if (start_after is None or start_after < relative_path) and (end_at is None or relative_path <= end_at):
-                    if os.path.isfile(full_path):
-                        yield ObjectMetadata(
-                            key=relative_path,
-                            content_length=os.path.getsize(full_path),
-                            last_modified=datetime.fromtimestamp(os.path.getmtime(full_path), tz=timezone.utc),
-                        )
-                    elif os.path.isdir(full_path):
-                        if include_directories:
-                            yield ObjectMetadata(
-                                key=relative_path,
-                                content_length=0,
-                                type="directory",
-                                last_modified=AWARE_DATETIME_MIN,
-                            )
-                        else:
-                            directories_to_walk.append(full_path)
-
-            # Walk all directories only if include_directories is False
-            if not include_directories:
-                for dir_path in directories_to_walk:
-                    for root, _, files in os.walk(dir_path):
-                        for file_name in sorted(files):
-                            file_path = os.path.join(root, file_name)
-                            relative_path = os.path.relpath(file_path, self._base_path)
-
-                            if (start_after is None or start_after < relative_path) and (
-                                end_at is None or relative_path <= end_at
-                            ):
-                                yield ObjectMetadata(
-                                    key=relative_path,
-                                    content_length=os.path.getsize(file_path),
-                                    last_modified=datetime.fromtimestamp(os.path.getmtime(file_path), tz=timezone.utc),
-                                )
+            yield from self._explore_directory(parent_dir, prefix, start_after, end_at, include_directories)
 
         return self._collect_metrics(_invoke_api, operation="LIST", path=prefix)
+
+    def _explore_directory(
+        self, dir_path: str, prefix: str, start_after: Optional[str], end_at: Optional[str], include_directories: bool
+    ) -> Iterator[ObjectMetadata]:
+        """
+        Recursively explore a directory and yield objects in lexicographical order.
+        """
+        try:
+            # List contents of current directory
+            dir_entries = os.listdir(dir_path)
+            dir_entries.sort()  # Sort entries for consistent ordering
+
+            # Collect all entries in this directory
+            entries = []
+
+            for entry in dir_entries:
+                full_path = os.path.join(dir_path, entry)
+                if not full_path.startswith(prefix):
+                    continue
+
+                relative_path = os.path.relpath(full_path, self._base_path)
+
+                # Check if this entry is within our range
+                if (start_after is None or start_after < relative_path) and (end_at is None or relative_path <= end_at):
+                    if os.path.isfile(full_path):
+                        entries.append((relative_path, full_path, _EntryType.FILE))
+                    elif os.path.isdir(full_path):
+                        if include_directories:
+                            entries.append((relative_path, full_path, _EntryType.DIRECTORY))
+                        else:
+                            # Add directory for recursive exploration
+                            entries.append((relative_path, full_path, _EntryType.DIRECTORY_TO_EXPLORE))
+
+            # Sort entries by relative path
+            entries.sort(key=lambda x: x[0])
+
+            # Process entries in order
+            for relative_path, full_path, entry_type in entries:
+                if entry_type == _EntryType.FILE:
+                    yield ObjectMetadata(
+                        key=relative_path,
+                        content_length=os.path.getsize(full_path),
+                        last_modified=datetime.fromtimestamp(os.path.getmtime(full_path), tz=timezone.utc),
+                    )
+                elif entry_type == _EntryType.DIRECTORY:
+                    yield ObjectMetadata(
+                        key=relative_path,
+                        content_length=0,
+                        type="directory",
+                        last_modified=AWARE_DATETIME_MIN,
+                    )
+                elif entry_type == _EntryType.DIRECTORY_TO_EXPLORE:
+                    # Recursively explore this directory
+                    yield from self._explore_directory(full_path, prefix, start_after, end_at, include_directories)
+
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Failed to list contents of {dir_path}, caused by: {e}")
+            return
 
     def _upload_file(self, remote_path: str, f: Union[str, IO], attributes: Optional[dict[str, str]] = None) -> int:
         os.makedirs(os.path.dirname(remote_path), exist_ok=True)
