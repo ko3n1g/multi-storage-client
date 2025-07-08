@@ -55,3 +55,6 @@ Likewise, there are extras for each higher level library.
 
    # Zarr.
    pip install "multi-storage-client[zarr]"
+
+   # Ray
+   pip install "multi-storage-client[ray]"
