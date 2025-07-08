@@ -60,7 +60,7 @@ def verify_sync_and_contents(target_url: str, expected_files: dict):
     argvalues=[
         [tempdatastore.TemporaryAWSS3Bucket, {}],  # Default settings
         [tempdatastore.TemporaryAWSS3Bucket, {"max_workers": 1}],  # Serial execution
-        [tempdatastore.TemporaryAWSS3Bucket, {"max_workers": 4}],  # Parallel with 4 workers
+        [tempdatastore.TemporaryAWSS3Bucket, {"max_workers": 2}],  # Parallel with 2 workers
     ],
 )
 def test_sync_function(

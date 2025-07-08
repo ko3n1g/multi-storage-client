@@ -109,6 +109,7 @@ def cache_dir():
         yield tmpdir
 
 
+@pytest.mark.serial
 def test_multiprocessing_cache_manager(cache_dir):
     """
     Test the CacheManager with multiple processes reading and writing to the cache.
@@ -147,6 +148,7 @@ def test_multiprocessing_cache_manager(cache_dir):
     assert cache_manager.cache_size() <= max_cache_size
 
 
+@pytest.mark.serial
 def test_multiprocessing_cache_manager_single_refresh(cache_dir):
     num_procs = 8
     keys = [f"file-{i:04d}.bin" for i in range(num_procs * 10)]
