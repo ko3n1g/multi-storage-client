@@ -33,6 +33,7 @@ from .shortcuts import (
     resolve_storage_client,
     set_telemetry,
     sync,
+    sync_replicas,
     upload_file,
     write,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "resolve_storage_client",
     "set_telemetry",
     "sync",
+    "sync_replicas",
     "upload_file",
     "list",
     "write",

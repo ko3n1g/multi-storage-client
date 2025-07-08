@@ -83,7 +83,14 @@ def test_sync_help_command(run_cli):
     assert "--delete-unmatched-files" in stdout
     assert "--verbose" in stdout
     assert "source_url" in stdout
-    assert "target_url" in stdout
+    assert "--target-url" in stdout
+    assert "--replica-indices" in stdout
+    assert "--ray-cluster" in stdout
+
+
+def test_sync_without_replicas(run_cli):
+    stdout, stderr = run_cli("sync", "msc://default/data")
+    assert "No replicas found in profile 'default'" in stderr
 
 
 def test_sync_command_with_real_files(run_cli):
@@ -92,7 +99,7 @@ def test_sync_command_with_real_files(run_cli):
         source_file.write_text("Test content")
 
         # Run the sync command
-        stdout, stderr = run_cli("sync", "--verbose", source_dir, target_dir)
+        stdout, stderr = run_cli("sync", "--verbose", source_dir, "--target-url", target_dir)
 
         # Verify that the file was copied
         target_file = Path(target_dir) / "test.txt"

@@ -308,11 +308,35 @@ def sync(
     :param source_url: The URL for the source storage.
     :param target_url: The URL for the target storage.
     :param delete_unmatched_files: Whether to delete files at the target that are not present at the source.
+    :param execution_mode: The execution mode to use. Currently supports "local" and "ray".
     """
     source_client, source_path = resolve_storage_client(source_url)
     target_client, target_path = resolve_storage_client(target_url)
     target_client.sync_from(
         source_client, source_path, target_path, delete_unmatched_files, execution_mode=execution_mode
+    )
+
+
+def sync_replicas(
+    source_url: str,
+    replica_indices: Optional[list[int]] = None,
+    delete_unmatched_files: bool = False,
+    execution_mode: ExecutionMode = ExecutionMode.LOCAL,
+) -> None:
+    """
+    Syncs files from the source storage to all the replicas.
+
+    :param source_url: The URL for the source storage.
+    :param replica_indices: Specify the indices of the replicas to sync to. If not provided, all replicas will be synced. Index starts from 0.
+    :param delete_unmatched_files: Whether to delete files at the replicas that are not present at the source.
+    :param execution_mode: The execution mode to use. Currently supports "local" and "ray".
+    """
+    source_client, source_path = resolve_storage_client(source_url)
+    source_client.sync_replicas(
+        source_path,
+        replica_indices=replica_indices,
+        delete_unmatched_files=delete_unmatched_files,
+        execution_mode=execution_mode,
     )
 
 

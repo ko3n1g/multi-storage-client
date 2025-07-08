@@ -172,3 +172,55 @@ def test_storage_client_sync_with_files(ray_cluster):
             f"Expected {source_files}, found {synced_files}"
         )
         assert len(synced_files) == 500, f"Expected 500 synced files, found {len(synced_files)}"
+
+
+def test_storage_client_sync_replicas(ray_cluster):
+    """
+    Test storage client sync replicas with Ray.
+    """
+    with (
+        tempdatastore.TemporaryPOSIXDirectory() as temp_source_data_store,
+        tempdatastore.TemporaryPOSIXDirectory() as temp_replica1_data_store,
+        tempdatastore.TemporaryPOSIXDirectory() as temp_replica2_data_store,
+    ):
+        config_dict = {
+            "profiles": {
+                "source": temp_source_data_store.profile_config_dict(),
+                "replica1": temp_replica1_data_store.profile_config_dict(),
+                "replica2": temp_replica2_data_store.profile_config_dict(),
+            }
+        }
+
+        config_dict["profiles"]["source"]["replicas"] = [
+            {"replica_profile": "replica1", "read_priority": 1},
+            {"replica_profile": "replica2", "read_priority": 2},
+        ]
+
+        # Create data files
+        source_client = StorageClient(StorageClientConfig.from_dict(config_dict=config_dict, profile="source"))
+        source_files = []
+        for i in range(100):
+            for j in range(5):
+                file_path = f"source/dir_{i}/subdir_{j}/file_{i}.txt"
+                content = f"Content of file {i}"
+                source_files.append(file_path.removeprefix("source/"))
+                source_client.write(file_path, content.encode())
+
+        # Sync from source to target using Ray
+        source_client.sync_replicas(source_path="source/", execution_mode=ExecutionMode.RAY)
+
+        # Verify sync worked by checking replica1 has the same files
+        replica1 = StorageClient(StorageClientConfig.from_dict(config_dict=config_dict, profile="replica1"))
+        synced_files = list(replica1.list(prefix=""))
+        assert set([f.key.removeprefix("source/") for f in synced_files]) == set(source_files), (
+            f"Expected {source_files}, found {synced_files}"
+        )
+        assert len(synced_files) == 500, f"Expected 500 synced files, found {len(synced_files)}"
+
+        # Verify sync worked by checking replica2 has the same files
+        replica2 = StorageClient(StorageClientConfig.from_dict(config_dict=config_dict, profile="replica2"))
+        synced_files = list(replica2.list(prefix=""))
+        assert set([f.key.removeprefix("source/") for f in synced_files]) == set(source_files), (
+            f"Expected {source_files}, found {synced_files}"
+        )
+        assert len(synced_files) == 500, f"Expected 500 synced files, found {len(synced_files)}"

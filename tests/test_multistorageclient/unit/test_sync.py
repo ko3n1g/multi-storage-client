@@ -22,6 +22,7 @@ import pytest
 import multistorageclient as msc
 from multistorageclient.constants import MEMORY_LOAD_LIMIT
 from multistorageclient.providers.manifest_metadata import DEFAULT_MANIFEST_BASE_DIR
+from multistorageclient.types import ExecutionMode
 from test_multistorageclient.unit.utils import config, tempdatastore
 
 
@@ -240,3 +241,59 @@ def test_sync_from(temp_data_store_type: type[tempdatastore.TemporaryDataStore])
 
         # Verify contents on target match expectation.
         verify_sync_and_contents(target_url=target_msc_url, expected_files=expected_files)
+
+
+@pytest.mark.parametrize(
+    argnames=["temp_data_store_type"],
+    argvalues=[[tempdatastore.TemporaryAWSS3Bucket]],
+)
+def test_sync_replicas(temp_data_store_type: type[tempdatastore.TemporaryDataStore]):
+    msc.shortcuts._STORAGE_CLIENT_CACHE.clear()
+
+    obj_profile = "s3-sync"
+    local_profile = "local"
+
+    with (
+        tempdatastore.TemporaryPOSIXDirectory() as temp_source_data_store,
+        temp_data_store_type() as temp_data_store,
+    ):
+        config_dict = {
+            "profiles": {
+                obj_profile: temp_data_store.profile_config_dict(),
+                local_profile: temp_source_data_store.profile_config_dict(),
+            }
+        }
+
+        # Make local_profile a replica of obj_profile
+        config_dict["profiles"][obj_profile]["replicas"] = [
+            {"replica_profile": local_profile, "read_priority": 1},
+        ]
+
+        config.setup_msc_config(config_dict=config_dict)
+
+        source_msc_url = f"msc://{obj_profile}/synced-files"
+        replica_msc_url = f"msc://{local_profile}/synced-files"
+
+        # Create local dataset
+        expected_files = {
+            "dir1/file0.txt": "a" * 150,
+            "dir1/file1.txt": "b" * 200,
+            "dir1/file2.txt": "c" * 1000,
+            "dir2/file0.txt": "d" * 1,
+            "dir2/file1.txt": "e" * 5,
+            "dir2/file2.txt": "f" * (MEMORY_LOAD_LIMIT + 1024),  # One large file
+            "dir3/file0.txt": "g" * 10000,
+            "dir3/file1.txt": "h" * 800,
+            "dir3/file2.txt": "i" * 512,
+        }
+        create_local_test_dataset(source_msc_url, expected_files)
+        # Insert a delay before sync'ing so that timestamps will be clearer.
+        time.sleep(1)
+
+        source_client, _ = msc.resolve_storage_client(source_msc_url)
+
+        # The leading "/" is implied, but a rendundant one should be handled okay.
+        source_client.sync_replicas(source_path="", execution_mode=ExecutionMode.LOCAL)
+
+        # Verify contents on target match expectation.
+        verify_sync_and_contents(target_url=replica_msc_url, expected_files=expected_files)

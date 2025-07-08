@@ -20,7 +20,7 @@ import os
 import threading
 from collections.abc import Iterator
 from pathlib import PurePosixPath
-from typing import Any, Optional, Union, cast
+from typing import Any, List, Optional, Union, cast
 
 from .config import StorageClientConfig
 from .constants import MEMORY_LOAD_LIMIT
@@ -129,14 +129,18 @@ class StorageClient:
     def profile(self) -> str:
         return self._config.profile
 
-    def _initialize_replicas(self, replicas: list["Replica"]) -> None:
+    def _initialize_replicas(self, replicas: list[Replica]) -> None:
         """Initialize replica StorageClient instances."""
         # Sort replicas by read_priority, the first one is the primary replica
         sorted_replicas = sorted(replicas, key=lambda r: r.read_priority)
 
         replica_clients = []
         for replica in sorted_replicas:
-            replica_config = StorageClientConfig.from_file(profile=replica.replica_profile)
+            if self._config._config_dict is None:
+                raise ValueError(f"Cannot initialize replica '{replica.replica_profile}' without a config")
+            replica_config = StorageClientConfig.from_dict(
+                config_dict=self._config._config_dict, profile=replica.replica_profile
+            )
 
             storage_client = StorageClient(config=replica_config)
             replica_clients.append(storage_client)
@@ -546,3 +550,49 @@ class StorageClient:
             num_worker_processes=num_worker_processes,
             delete_unmatched_files=delete_unmatched_files,
         )
+
+    def sync_replicas(
+        self,
+        source_path: str,
+        replica_indices: Optional[List[int]] = None,
+        delete_unmatched_files: bool = False,
+        description: str = "Syncing replicas",
+        num_worker_processes: Optional[int] = None,
+        execution_mode: ExecutionMode = ExecutionMode.LOCAL,
+    ) -> None:
+        """
+        Sync files from the source storage client to target replicas.
+
+        :param source_path: The logical path to sync from.
+        :param replica_indices: Specify the indices of the replicas to sync to. If not provided, all replicas will be synced. Index starts from 0.
+        :param delete_unmatched_files: Whether to delete files at the target that are not present at the source.
+        :param description: Description of sync process for logging purposes.
+        :param num_worker_processes: The number of worker processes to use.
+        :param execution_mode: The execution mode to use. Currently supports "local" and "ray".
+        """
+        if not self._replicas:
+            logger.warning(
+                "No replicas found in profile '%s'. Add a 'replicas' section to your profile configuration to enable "
+                "secondary storage locations for redundancy and performance.",
+                self._config.profile,
+            )
+            return None
+
+        if replica_indices:
+            try:
+                replicas = [self._replicas[i] for i in replica_indices]
+            except IndexError as e:
+                raise ValueError(f"Replica index out of range: {replica_indices}") from e
+        else:
+            replicas = self._replicas
+
+        for replica in replicas:
+            replica.sync_from(
+                self,
+                source_path,
+                source_path,
+                delete_unmatched_files=delete_unmatched_files,
+                description=description,
+                num_worker_processes=num_worker_processes,
+                execution_mode=execution_mode,
+            )

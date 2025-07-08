@@ -17,6 +17,7 @@ import argparse
 import sys
 
 import multistorageclient as msc
+from multistorageclient.types import ExecutionMode
 
 from .action import Action
 
@@ -43,39 +44,99 @@ class SyncAction(Action):
             action="store_true",
             help="Enable verbose logging",
         )
+        parser.add_argument(
+            "--ray-cluster",
+            help="Ray cluster address (e.g. 'ray://<ip>:<port>')",
+        )
+        parser.add_argument(
+            "--target-url",
+            help="The path or URL for the target storage (POSIX path or msc:// URL). If not provided, will sync to all the replicas if configured.",
+        )
+        parser.add_argument(
+            "--replica-indices",
+            help="The indices (comma separated list) of the replicas to sync to. If not provided, will sync to all the replicas. Index starts from 0.",
+        )
         parser.add_argument("source_url", help="The path or URL for the source storage (POSIX path or msc:// URL)")
-        parser.add_argument("target_url", help="The path or URL for the target storage (POSIX path or msc:// URL)")
 
         # Add examples as description
         parser.description = """Synchronize files between storage locations. Can be used to:
   1. Upload files from filesystem to object stores
   2. Download files from object stores to filesystem
   3. Transfer files between different object stores
+  4. Synchronize files to all the replicas
 """
 
         # Add examples as epilog (appears after argument help)
         parser.epilog = """examples:
   # Upload: filesystem to object store
-  msc sync /path/to/dataset msc://profile/prefix
+  msc sync /path/to/dataset --target-url msc://profile/prefix
 
   # Download: object store to filesystem
-  msc sync msc://profile/prefix /path/to/dataset
+  msc sync msc://profile/prefix --target-url /path/to/dataset
 
   # Transfer: between object stores
-  msc sync msc://profile1/prefix msc://profile2/prefix
+  msc sync msc://profile1/prefix --target-url msc://profile2/prefix
 
   # Sync with cleanup (removes files in target not in source)
-  msc sync --delete-unmatched-files msc://source-profile/data msc://target-profile/data
+  msc sync msc://source-profile/data --delete-unmatched-files --target-url msc://target-profile/data
+
+  # Sync with Ray (requires Ray to be installed)
+  msc sync msc://source-profile/data --ray-cluster 127.0.0.1:6379 --target-url msc://target-profile/data
+
+  # Sync to all the replicas
+  msc sync msc://source-profile/data
+
+  # Sync to specific replicas, index starts from 0
+  msc sync msc://source-profile/data --replica-indices "0,1"
 """
 
     def run(self, args: argparse.Namespace) -> int:
         if args.verbose:
             print(f"Synchronizing files from {args.source_url} to {args.target_url} ...")
+
+        if args.ray_cluster:
+            try:
+                import ray
+
+                ray.init(address=args.ray_cluster)
+                execution_mode = ExecutionMode.RAY
+            except ImportError:
+                print("Ray is not installed. Please install it with 'pip install ray'.")
+                return 1
+        else:
+            execution_mode = ExecutionMode.LOCAL
+
         try:
-            msc.sync(args.source_url, args.target_url, args.delete_unmatched_files)
+            if args.target_url:
+                msc.sync(args.source_url, args.target_url, args.delete_unmatched_files, execution_mode=execution_mode)
+            else:
+                try:
+                    replica_indices = (
+                        [int(i) for i in args.replica_indices.split(",")] if args.replica_indices else None
+                    )
+                except ValueError:
+                    print(
+                        'Invalid --replica-indices value. Use a comma-separated list of integers, e.g. "0,2".',
+                        file=sys.stderr,
+                    )
+                    return 1
+                msc.sync_replicas(
+                    args.source_url,
+                    replica_indices=replica_indices,
+                    delete_unmatched_files=args.delete_unmatched_files,
+                    execution_mode=execution_mode,
+                )
             if args.verbose:
                 print("Synchronization completed successfully")
             return 0
         except Exception as e:
             print(f"Error during synchronization: {str(e)}", file=sys.stderr)
             return 1
+        finally:
+            if args.ray_cluster:
+                try:
+                    import ray
+
+                    ray.shutdown()
+                except Exception as e:
+                    print(f"Error shutting down Ray: {str(e)}", file=sys.stderr)
