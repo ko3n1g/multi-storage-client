@@ -313,8 +313,10 @@ class GoogleStorageProvider(BaseStorageProvider):
             bucket_obj = self._gcs_client.bucket(bucket)
             blob = bucket_obj.blob(key)
             if byte_range:
-                return blob.download_as_bytes(start=byte_range.offset, end=byte_range.offset + byte_range.size - 1)
-            return blob.download_as_bytes()
+                return blob.download_as_bytes(
+                    start=byte_range.offset, end=byte_range.offset + byte_range.size - 1, single_shot_download=True
+                )
+            return blob.download_as_bytes(single_shot_download=True)
 
         return self._collect_metrics(_invoke_api, operation="GET", bucket=bucket, key=key)
 
