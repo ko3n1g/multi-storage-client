@@ -248,10 +248,15 @@ class StorageClient:
                     f"The file at path '{virtual_path}' already exists; "
                     f"overwriting is not yet allowed when using a metadata provider."
                 )
-        self._storage_provider.upload_file(remote_path, local_path, attributes)
         if self._metadata_provider:
-            metadata = self._storage_provider.get_object_metadata(remote_path)
-            self._metadata_provider.add_file(virtual_path, metadata)
+            # if metdata provider is present, we only write attributes to the metadata provider
+            self._storage_provider.upload_file(remote_path, local_path, attributes=None)
+            obj_metadata = self._storage_provider.get_object_metadata(remote_path)
+            obj_metadata.metadata = (obj_metadata.metadata or {}) | (attributes or {})
+            with self._metadata_provider_lock or contextlib.nullcontext():
+                self._metadata_provider.add_file(virtual_path, obj_metadata)
+        else:
+            self._storage_provider.upload_file(remote_path, local_path, attributes)
 
     @retry
     def write(self, path: str, body: bytes, attributes: Optional[dict[str, str]] = None) -> None:
@@ -270,12 +275,16 @@ class StorageClient:
                     f"The file at path '{virtual_path}' already exists; "
                     f"overwriting is not yet allowed when using a metadata provider."
                 )
-        self._storage_provider.put_object(path, body, attributes=attributes)
         if self._metadata_provider:
+            # if metadata provider is present, we only write attributes to the metadata provider
+            self._storage_provider.put_object(path, body, attributes=None)
             # TODO(NGCDP-3016): Handle eventual consistency of Swiftstack, without wait.
-            metadata = self._storage_provider.get_object_metadata(path)
+            obj_metadata = self._storage_provider.get_object_metadata(path)
+            obj_metadata.metadata = (obj_metadata.metadata or {}) | (attributes or {})
             with self._metadata_provider_lock or contextlib.nullcontext():
-                self._metadata_provider.add_file(virtual_path, metadata)
+                self._metadata_provider.add_file(virtual_path, obj_metadata)
+        else:
+            self._storage_provider.put_object(path, body, attributes=attributes)
 
     def copy(self, src_path: str, dest_path: str) -> None:
         """

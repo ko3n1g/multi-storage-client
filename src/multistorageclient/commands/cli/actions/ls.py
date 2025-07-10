@@ -130,7 +130,11 @@ class LsAction(Action):
 
         if show_attributes:
             # Format attributes dictionary as JSON string
-            attributes_str = json.dumps(metadata.metadata) if metadata.metadata else ""
+            try:
+                attributes_str = json.dumps(metadata.metadata) if metadata.metadata else ""
+            except TypeError:
+                # the dict can have None values, which can't be serialized to JSON, so we just convert to string
+                attributes_str = str(metadata.metadata) if metadata.metadata else ""
             return [date_str, size_str, metadata.key, attributes_str]
         else:
             return [date_str, size_str, metadata.key]
