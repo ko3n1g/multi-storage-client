@@ -74,6 +74,7 @@ Publish Package:
     URM_ARTIFACTORY_PATH: sw-ngc-data-platform-pypi/multi-storage-client/${CI_COMMIT_TAG}/
   script:
     # Skip upload if artifacts for the tag already exist.
+    # Hardcode "arch=any" temporarily to unblock publishing.
     - |
       nix develop --command bash -c "
         jf rt search \
@@ -93,7 +94,7 @@ Publish Package:
             --fail-no-op \
             --flat \
             --quiet \
-            --target-props 'component_name=multi_storage_client;version=${CI_COMMIT_TAG};arch=${ARTIFACTORY_ARCH};os=${ARTIFACTORY_OS};changelist=${CI_COMMIT_SHORT_SHA};branch=release;release_approver=${GITLAB_USER_LOGIN};release_status=ready' \
+            --target-props 'component_name=multi_storage_client;version=${CI_COMMIT_TAG};arch=any;os=${ARTIFACTORY_OS};changelist=${CI_COMMIT_SHORT_SHA};branch=release;release_approver=${GITLAB_USER_LOGIN};release_status=ready' \
             dist/multi_storage_client-${CI_COMMIT_TAG}-*-${WHEEL_OS}_*_${WHEEL_ARCH}.whl \
             ${URM_ARTIFACTORY_PATH}
         )
