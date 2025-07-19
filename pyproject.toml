@@ -62,7 +62,7 @@ fsspec = ["fsspec>=2023.9.0"]
 numpy = ["numpy~=2.0"]
 torch = ["torch~=2.7"]
 xarray = ["xarray>=2024.07.0"]
-zarr = ["zarr~=2.15.0", "numcodecs<0.16; python_full_version >= '3.11'"]
+zarr = ["zarr~=2.15.0", "numcodecs<0.16"]
 ray = ["ray~=2.34.0"]
 
 [dependency-groups]
