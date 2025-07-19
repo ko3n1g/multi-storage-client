@@ -1,16 +1,12 @@
 [build-system]
-requires = [
-    "maturin~=1.9"
-]
+requires = ["maturin~=1.9"]
 build-backend = "maturin"
 
 [project]
 name = "multi-storage-client"
 version = "0.25.0"
 description = "Unified high-performance Python client for object and file stores."
-authors = [
-    { name = "NVIDIA Multi-Storage Client Team" }
-]
+authors = [{ name = "NVIDIA Multi-Storage Client Team" }]
 license = "Apache-2.0"
 readme = "README.md"
 requires-python = "~=3.9"
@@ -24,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13"
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "filelock~=3.14",
@@ -32,12 +28,12 @@ dependencies = [
     "jsonschema~=4.0",
     "python-dateutil~=2.8",
     "pyyaml~=6.0.1",
-    "opentelemetry-api~=1.24",
+    "opentelemetry-api~=1.24.0",
     "xattr~=1.1.4",
     "wcmatch~=10.0",
     "tqdm~=4.27",
     "lark~=1.2.2",
-    "tabulate~=0.9.0"
+    "tabulate~=0.9.0",
 ]
 
 [project.urls]
@@ -49,49 +45,25 @@ documentation = "https://nvidia.github.io/multi-storage-client/"
 observability-otel = [
     "opentelemetry-sdk~=1.24",
     "opentelemetry-exporter-otlp-proto-http~=1.24",
-    "datasketches~=5.1"
+    "datasketches~=5.1",
 ]
 
-msal = [
-    "msal~=1.31.1"
-]
+msal = ["msal~=1.31.1"]
 
 # Storage providers.
-aistore = [
-    "aistore~=1.14"
-]
-azure-storage-blob = [
-    "azure-storage-blob~=12.17"
-]
-boto3 = [
-    "boto3~=1.36"
-]
-google-cloud-storage = [
-    "google-cloud-storage~=3.2"
-]
-oci = [
-    "oci~=2.150.0"
-]
+aistore = ["aistore~=1.14"]
+azure-storage-blob = ["azure-storage-blob~=12.17"]
+boto3 = ["boto3~=1.36"]
+google-cloud-storage = ["google-cloud-storage~=3.2"]
+oci = ["oci~=2.150.0"]
 
 # Higher-level libraries.
-fsspec = [
-    "fsspec>=2023.9.0"
-]
-numpy = [
-    "numpy~=2.0"
-]
-torch = [
-    "torch~=2.7"
-]
-xarray = [
-    "xarray>=2024.07.0"
-]
-zarr = [
-    "zarr~=2.15"
-]
-ray = [
-    "ray~=2.34.0"
-]
+fsspec = ["fsspec>=2023.9.0"]
+numpy = ["numpy~=2.0"]
+torch = ["torch~=2.7"]
+xarray = ["xarray>=2024.07.0"]
+zarr = ["zarr~=2.15"]
+ray = ["ray~=2.34.0"]
 
 [dependency-groups]
 dev = [
@@ -109,7 +81,7 @@ dev = [
     "sphinx~=7.4.7",
     "sphinx-copybutton~=0.5.1",
     "sphinx-pyproject~=0.3",
-    "furo>=2024.8.6"
+    "furo>=2024.8.6",
 ]
 
 [project.scripts]
@@ -123,9 +95,7 @@ msc = "multistorageclient.contrib.async_fs.MultiStorageAsyncFileSystem"
 branch = true
 data_file = ".reports/unit/.coverage"
 parallel = true
-source = [
-    "src"
-]
+source = ["src"]
 
 [tool.coverage.html]
 directory = ".reports/unit/coverage"
@@ -145,29 +115,18 @@ output-file = ".licenses.md"
 with-urls = true
 
 [tool.poetry]
-packages = [
-    { include = "multistorageclient", from = "src" }
-]
+packages = [{ include = "multistorageclient", from = "src" }]
 
 [tool.pyright]
-include = [
-    "src",
-    "tests"
-]
+include = ["src", "tests"]
 typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
-addopts = [
-    "--import-mode=importlib"
-]
+addopts = ["--import-mode=importlib"]
 asyncio_default_fixture_loop_scope = "function"
-markers = [
-    "serial: marks tests as serial (deselect with '-m \"not serial\"')"
-]
+markers = ["serial: marks tests as serial (deselect with '-m \"not serial\"')"]
 
-pythonpath = [
-    "tests"
-]
+pythonpath = ["tests"]
 testpaths = [
     "tests/test_multistorageclient/unit",
     "tests/test_multistorageclient_rust/unit",
@@ -182,12 +141,8 @@ docstring-code-format = true
 indent-style = "space"
 
 [tool.ruff.lint]
-extend-select = [
-    "I"
-]
-fixable = [
-    "ALL"
-]
+extend-select = ["I"]
+fixable = ["ALL"]
 unfixable = []
 
 [tool.uv]
