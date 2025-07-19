@@ -1394,7 +1394,7 @@ requires-dist = [
     { name = "wcmatch", specifier = "~=10.0" },
     { name = "xarray", marker = "extra == 'xarray'", specifier = ">=2024.7.0" },
     { name = "xattr", specifier = "~=1.1.4" },
-    { name = "zarr", marker = "extra == 'zarr'", specifier = "~=2.15" },
+    { name = "zarr", marker = "extra == 'zarr'", specifier = "~=2.15.0" },
 ]
 provides-extras = ["observability-otel", "msal", "aistore", "azure-storage-blob", "boto3", "google-cloud-storage", "oci", "fsspec", "numpy", "torch", "xarray", "zarr", "ray"]
 
